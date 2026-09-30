@@ -1,0 +1,6 @@
+{
+  "name": "LuminaVR - Cinéma Ambilight Meta Quest 3S",
+  "description": "Lecteur vidéo VR immersif avec Ambilight dynamique temps réel pour Meta Quest 3S et WebXR. Écran IMAX incurvé, environnements virtuels et immersion totale.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
