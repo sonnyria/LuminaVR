@@ -15,15 +15,15 @@ export class AmbilightExtractor {
     this.canvas.height = this.sampleHeight;
     this.ctx = this.canvas.getContext('2d', { willReadFrequently: true });
 
-    // Initialize with soft warm cinema ambient
-    const defaultColor: [number, number, number] = [15, 18, 25];
+    // Initialize with pure black (no artificial blue/gray tint)
+    const defaultColor: [number, number, number] = [0, 0, 0];
     this.smoothedData = {
       top: Array(8).fill(defaultColor),
       bottom: Array(8).fill(defaultColor),
       left: Array(6).fill(defaultColor),
       right: Array(6).fill(defaultColor),
       dominant: defaultColor,
-      averageBrightness: 0.15,
+      averageBrightness: 0.0,
     };
   }
 
@@ -192,6 +192,12 @@ export class AmbilightExtractor {
   private enhanceColor(rgb: [number, number, number], saturation: number, intensity: number): [number, number, number] {
     let [r, g, b] = rgb;
     
+    // Strict pure black threshold for letterbox black bars and dark scenes
+    const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+    if (lum < 7) {
+      return [0, 0, 0];
+    }
+
     // Convert RGB to HSL
     const rNorm = r / 255;
     const gNorm = g / 255;

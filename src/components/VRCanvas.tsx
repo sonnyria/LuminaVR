@@ -58,12 +58,13 @@ export const VRCanvas: React.FC<VRCanvasProps> = ({
   // Canvas for dynamic halo texture
   const haloCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const haloTextureRef = useRef<THREE.CanvasTexture | null>(null);
-  const sampleCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
   // In-VR UI plane
   const vrUIMeshRef = useRef<THREE.Mesh | null>(null);
   const vrUICanvasRef = useRef<HTMLCanvasElement | null>(null);
   const vrUITextureRef = useRef<THREE.CanvasTexture | null>(null);
+  const sessionRef = useRef<any>(null);
+  const bOrYWasPressedRef = useRef(false);
 
   // Mouse look state for 2D desktop / Quest window preview
   const isDraggingRef = useRef(false);
@@ -115,6 +116,10 @@ export const VRCanvas: React.FC<VRCanvasProps> = ({
 
     containerRef.current.appendChild(renderer.domElement);
 
+    // Baseline cinema illumination: ensures the theater room, seats, and screen frame are ALWAYS visible in VR
+    const baselineLight = new THREE.HemisphereLight(0x405580, 0x0a0f1d, 0.5);
+    scene.add(baselineLight);
+
     // Ambilight Lights
     const ambientLight = new THREE.AmbientLight(0x0a0d18, 0.3);
     scene.add(ambientLight);
@@ -138,10 +143,10 @@ export const VRCanvas: React.FC<VRCanvasProps> = ({
     scene.add(envGroup);
     environmentGroupRef.current = envGroup;
 
-    // Halo Canvas Setup (640x360 16:9 for screen-conforming anamorphic diffusion)
+    // Halo Canvas Setup (320x180 16:9 for real-time directional linear edge diffusion)
     const haloCanvas = document.createElement('canvas');
-    haloCanvas.width = 640;
-    haloCanvas.height = 360;
+    haloCanvas.width = 320;
+    haloCanvas.height = 180;
     haloCanvasRef.current = haloCanvas;
     const haloTexture = new THREE.CanvasTexture(haloCanvas);
     haloTexture.minFilter = THREE.LinearFilter;
@@ -149,11 +154,9 @@ export const VRCanvas: React.FC<VRCanvasProps> = ({
     haloTexture.generateMipmaps = false;
     haloTextureRef.current = haloTexture;
 
-    // Small multi-zone sample canvas for smooth 2D Gaussian optical blur
-    const sampleCanvas = document.createElement('canvas');
-    sampleCanvas.width = 8;
-    sampleCanvas.height = 6;
-    sampleCanvasRef.current = sampleCanvas;
+    // Raycaster for in-VR controller interactions
+    const raycaster = new THREE.Raycaster();
+    const tempMatrix = new THREE.Matrix4();
 
     // Setup WebXR Controllers for Meta Quest 3S
     const controllers: THREE.XRTargetRaySpace[] = [];
@@ -177,7 +180,49 @@ export const VRCanvas: React.FC<VRCanvasProps> = ({
       scene.add(controller);
 
       controller.addEventListener('selectstart', () => {
-        // VR Trigger press -> toggle play or handle VR HUD
+        // Check if pointing at In-VR 3D HUD
+        if (vrUIMeshRef.current && vrUIMeshRef.current.visible) {
+          tempMatrix.identity().extractRotation(controller.matrixWorld);
+          raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
+          raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
+
+          const intersects = raycaster.intersectObject(vrUIMeshRef.current);
+          if (intersects.length > 0 && intersects[0].uv) {
+            const uv = intersects[0].uv;
+            const canvasX = uv.x * 640;
+            const canvasY = (1 - uv.y) * 140;
+
+            // [🚪 Quitter VR] button (X: 430 to 620, Y: 18 to 80)
+            if (canvasX >= 430 && canvasX <= 620 && canvasY >= 18 && canvasY <= 80) {
+              handleExitVR();
+              return;
+            }
+            // [⏪ -10s] button (X: 190 to 290, Y: 18 to 80)
+            if (canvasX >= 190 && canvasX <= 290 && canvasY >= 18 && canvasY <= 80) {
+              if (videoRef.current) {
+                videoRef.current.currentTime = Math.max(0, videoRef.current.currentTime - 10);
+              }
+              return;
+            }
+            // [⏩ +10s] button (X: 310 to 410, Y: 18 to 80)
+            if (canvasX >= 310 && canvasX <= 410 && canvasY >= 18 && canvasY <= 80) {
+              if (videoRef.current) {
+                videoRef.current.currentTime = Math.min(
+                  videoRef.current.duration || 9999,
+                  videoRef.current.currentTime + 10
+                );
+              }
+              return;
+            }
+            // [▶ / ⏸] button (X: 20 to 170, Y: 18 to 80)
+            if (canvasX >= 20 && canvasX <= 170 && canvasY >= 18 && canvasY <= 80) {
+              onTogglePlay();
+              return;
+            }
+          }
+        }
+
+        // Click outside HUD toggles Play / Pause
         onTogglePlay();
       });
 
@@ -189,33 +234,39 @@ export const VRCanvas: React.FC<VRCanvasProps> = ({
     // WebXR Session State Listeners
     renderer.xr.addEventListener('sessionstart', () => {
       setIsVRPresenting(true);
-      camera.position.set(0, 1.4, 0);
+      if (videoRef.current && videoRef.current.paused) {
+        videoRef.current.play().catch(() => {});
+      }
+      if (videoTextureRef.current) {
+        videoTextureRef.current.needsUpdate = true;
+      }
     });
 
     renderer.xr.addEventListener('sessionend', () => {
+      sessionRef.current = null;
       setIsVRPresenting(false);
       camera.position.set(0, 1.4, 0);
       cameraRotationRef.current = { yaw: 0, pitch: 0 };
     });
 
-    // In-VR floating HUD setup
+    // In-VR floating HUD setup (640x140 high resolution canvas)
     const vrUICanvas = document.createElement('canvas');
-    vrUICanvas.width = 512;
-    vrUICanvas.height = 128;
+    vrUICanvas.width = 640;
+    vrUICanvas.height = 140;
     vrUICanvasRef.current = vrUICanvas;
     const vrUITexture = new THREE.CanvasTexture(vrUICanvas);
     vrUITextureRef.current = vrUITexture;
 
-    const vrUIGeom = new THREE.PlaneGeometry(1.8, 0.45);
+    const vrUIGeom = new THREE.PlaneGeometry(1.6, 0.35);
     const vrUIMat = new THREE.MeshBasicMaterial({
       map: vrUITexture,
       transparent: true,
-      opacity: 0.92,
+      opacity: 0.95,
       depthTest: false,
     });
     const vrUIMesh = new THREE.Mesh(vrUIGeom, vrUIMat);
-    vrUIMesh.position.set(0, 0.4, -2.2);
-    vrUIMesh.rotation.x = -0.35;
+    vrUIMesh.position.set(0, 0.65, -2.1);
+    vrUIMesh.rotation.x = -0.25;
     scene.add(vrUIMesh);
     vrUIMeshRef.current = vrUIMesh;
 
@@ -234,6 +285,32 @@ export const VRCanvas: React.FC<VRCanvasProps> = ({
         cameraRef.current.rotation.order = 'YXZ';
         cameraRef.current.rotation.y = cameraRotationRef.current.yaw;
         cameraRef.current.rotation.x = cameraRotationRef.current.pitch;
+      }
+
+      // Check Quest controller hardware buttons (B or Y button exits VR)
+      if (renderer.xr.isPresenting) {
+        const session = renderer.xr.getSession();
+        if (session && session.inputSources) {
+          let bOrYPressed = false;
+          for (const source of session.inputSources) {
+            if (source.gamepad && source.gamepad.buttons) {
+              // Button 4 / 5 are B / Y on Meta Quest Touch controllers
+              const b4 = source.gamepad.buttons[4];
+              const b5 = source.gamepad.buttons[5];
+              if ((b4 && b4.pressed) || (b5 && b5.pressed)) {
+                bOrYPressed = true;
+                if (!bOrYWasPressedRef.current) {
+                  bOrYWasPressedRef.current = true;
+                  handleExitVR();
+                  break;
+                }
+              }
+            }
+          }
+          if (!bOrYPressed) {
+            bOrYWasPressedRef.current = false;
+          }
+        }
       }
 
       // In-VR 3D HUD is only visible while presenting in the VR headset
@@ -279,23 +356,62 @@ export const VRCanvas: React.FC<VRCanvasProps> = ({
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Background pill container
-    ctx.fillStyle = 'rgba(8, 12, 22, 0.88)';
+    // Background container
+    ctx.fillStyle = 'rgba(6, 10, 20, 0.92)';
     ctx.beginPath();
-    ctx.roundRect(10, 10, canvas.width - 20, canvas.height - 20, 24);
+    ctx.roundRect(8, 8, canvas.width - 16, canvas.height - 16, 20);
     ctx.fill();
-
-    // Border
-    ctx.strokeStyle = 'rgba(56, 189, 248, 0.4)';
+    ctx.strokeStyle = 'rgba(56, 189, 248, 0.45)';
     ctx.lineWidth = 2;
     ctx.stroke();
 
-    // Play/Pause icon indicator
-    ctx.fillStyle = '#f8fafc';
-    ctx.font = 'bold 22px system-ui, sans-serif';
-    ctx.fillText(isPlaying ? '⏸ PAUSE' : '▶ LECTURE', 40, 60);
+    // Button 1: [▶ LECTURE / ⏸ PAUSE] (X: 20 to 170, Y: 18 to 80)
+    ctx.fillStyle = isPlaying ? 'rgba(234, 179, 8, 0.18)' : 'rgba(14, 165, 233, 0.18)';
+    ctx.beginPath();
+    ctx.roundRect(20, 18, 150, 62, 14);
+    ctx.fill();
+    ctx.strokeStyle = isPlaying ? '#eab308' : '#38bdf8';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 20px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(isPlaying ? '⏸ PAUSE' : '▶ LECTURE', 95, 56);
 
-    // Time text
+    // Button 2: [⏪ -10s] (X: 190 to 290, Y: 18 to 80)
+    ctx.fillStyle = 'rgba(30, 41, 59, 0.85)';
+    ctx.beginPath();
+    ctx.roundRect(190, 18, 100, 62, 14);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(148, 163, 184, 0.4)';
+    ctx.stroke();
+    ctx.fillStyle = '#cbd5e1';
+    ctx.font = 'bold 18px system-ui, sans-serif';
+    ctx.fillText('⏪ -10s', 240, 56);
+
+    // Button 3: [⏩ +10s] (X: 310 to 410, Y: 18 to 80)
+    ctx.fillStyle = 'rgba(30, 41, 59, 0.85)';
+    ctx.beginPath();
+    ctx.roundRect(310, 18, 100, 62, 14);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(148, 163, 184, 0.4)';
+    ctx.stroke();
+    ctx.fillStyle = '#cbd5e1';
+    ctx.fillText('⏩ +10s', 360, 56);
+
+    // Button 4: [🚪 Quitter VR] (X: 430 to 620, Y: 18 to 80)
+    ctx.fillStyle = 'rgba(239, 68, 68, 0.25)';
+    ctx.beginPath();
+    ctx.roundRect(430, 18, 190, 62, 14);
+    ctx.fill();
+    ctx.strokeStyle = '#ef4444';
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+    ctx.fillStyle = '#fca5a5';
+    ctx.font = 'bold 20px system-ui, sans-serif';
+    ctx.fillText('🚪 Quitter VR', 525, 56);
+
+    // Time text & Progress bar at bottom
     const formatTime = (sec: number) => {
       if (typeof sec !== 'number' || !isFinite(sec) || isNaN(sec) || sec < 0) return '0:00';
       const m = Math.floor(sec / 60);
@@ -304,18 +420,10 @@ export const VRCanvas: React.FC<VRCanvasProps> = ({
     };
     const validCurrentTime = (typeof currentTime === 'number' && isFinite(currentTime) && currentTime >= 0) ? currentTime : 0;
     const validDuration = (typeof duration === 'number' && isFinite(duration) && duration > 0) ? duration : 0;
-    ctx.fillStyle = '#94a3b8';
-    ctx.font = '16px monospace';
-    ctx.fillText(`${formatTime(validCurrentTime)} / ${formatTime(validDuration)}`, 180, 60);
 
-    // Ambilight status indicator
-    ctx.fillStyle = ambilightConfig.enabled ? '#38bdf8' : '#64748b';
-    ctx.fillText(`AMBILIGHT: ${ambilightConfig.enabled ? 'ON' : 'OFF'}`, 330, 60);
-
-    // Progress bar
-    const barX = 40;
-    const barY = 85;
-    const barW = canvas.width - 80;
+    const barX = 24;
+    const barY = 96;
+    const barW = canvas.width - 48;
     const barH = 10;
     ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
     ctx.beginPath();
@@ -328,6 +436,11 @@ export const VRCanvas: React.FC<VRCanvasProps> = ({
     ctx.beginPath();
     ctx.roundRect(barX, barY, progressWidth, barH, 5);
     ctx.fill();
+
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '12px monospace';
+    ctx.fillText(`${formatTime(validCurrentTime)} / ${formatTime(validDuration)}`, 24, 126);
 
     texture.needsUpdate = true;
   }, [isPlaying, currentTime, duration, ambilightConfig.enabled]);
@@ -713,135 +826,280 @@ export const VRCanvas: React.FC<VRCanvasProps> = ({
 
     if (canvas && texture) {
       const ctx = canvas.getContext('2d');
-      const sCanvas = sampleCanvasRef.current;
-      if (ctx && sCanvas) {
-        const sCtx = sCanvas.getContext('2d');
-        if (sCtx) {
-          const glowAlpha = Math.min(1, 0.72 * ambilightConfig.intensity);
-          const top = ambilightData.top || [];
-          const bot = ambilightData.bottom || [];
-          const left = ambilightData.left || [];
-          const right = ambilightData.right || [];
-          const dom = ambilightData.dominant || [20, 25, 35];
+      if (ctx) {
+        const glowAlpha = Math.min(1, 0.75 * ambilightConfig.intensity);
+        const top = ambilightData.top || [];
+        const bot = ambilightData.bottom || [];
+        const left = ambilightData.left || [];
+        const right = ambilightData.right || [];
+        const gradientSteps = typeof ambilightConfig.gradientSteps === 'number' ? ambilightConfig.gradientSteps : 0;
 
-          // 1. Generate 8x6 continuous perimeter chromatic matrix (100% weighted by screen edges)
-          const imgData = sCtx.createImageData(8, 6);
-          const d = imgData.data;
+        const W = canvas.width;  // 320
+        const H = canvas.height; // 180
 
-          for (let y = 0; y < 6; y++) {
-            for (let x = 0; x < 8; x++) {
-              const idx = (y * 8 + x) * 4;
-              let col: [number, number, number];
+        // Screen geometry on halo canvas matching 3D visual aspect ratio exactly
+        const haloScale = 1.0 + 2.5 * Math.max(0.6, ambilightConfig.spread);
+        const screenW = W / haloScale;
+        const screenH = H / haloScale;
+        const screenX = (W - screenW) / 2;
+        const screenY = (H - screenH) / 2;
+        const screenRight = screenX + screenW;
+        const screenBottom = screenY + screenH;
 
-              // Outer perimeter cells directly take their corresponding edge zone
-              if (y === 0) {
-                col = top[x] || dom;
-              } else if (y === 5) {
-                col = bot[x] || dom;
-              } else if (x === 0) {
-                col = left[y] || dom;
-              } else if (x === 7) {
-                col = right[y] || dom;
-              } else {
-                // Internal cells: power-weighted solely by proximity to the 4 edges
-                // Completely eliminates center image pollution so edge colors stay pure and dominant!
-                const dTop = y;
-                const dBot = 5 - y;
-                const dLeft = x;
-                const dRight = 7 - x;
+        // Anti-aliased stepped or continuous brightness falloff B(u)
+        // u = 0.0 at screen edge -> 1.0 at outer room darkness
+        const computeB = (u: number): number => {
+          if (u >= 1.0) return 0;
+          if (u <= 0.0) return 1.0;
 
-                // Inverse-distance power 2.4 gives strong authority to the closest edge
-                const wTop = 1 / Math.pow(dTop + 0.35, 2.4);
-                const wBot = 1 / Math.pow(dBot + 0.35, 2.4);
-                const wLeft = 1 / Math.pow(dLeft + 0.35, 2.4);
-                const wRight = 1 / Math.pow(dRight + 0.35, 2.4);
-
-                const sumW = wTop + wBot + wLeft + wRight;
-
-                const topCol = top[x] || dom;
-                const botCol = bot[x] || dom;
-                const leftCol = left[y] || dom;
-                const rightCol = right[y] || dom;
-
-                const r = (wTop * topCol[0] + wBot * botCol[0] + wLeft * leftCol[0] + wRight * rightCol[0]) / sumW;
-                const g = (wTop * topCol[1] + wBot * botCol[1] + wLeft * leftCol[1] + wRight * rightCol[1]) / sumW;
-                const b = (wTop * topCol[2] + wBot * botCol[2] + wLeft * leftCol[2] + wRight * rightCol[2]) / sumW;
-                col = [r, g, b];
-              }
-
-              d[idx] = Math.max(0, Math.min(255, Math.round(col[0])));
-              d[idx + 1] = Math.max(0, Math.min(255, Math.round(col[1])));
-              d[idx + 2] = Math.max(0, Math.min(255, Math.round(col[2])));
-              d[idx + 3] = Math.round(glowAlpha * 255);
-            }
+          if (gradientSteps <= 0) {
+            // Continu / analogique fluide
+            return Math.pow(1 - u, 1.35);
           }
-          sCtx.putImageData(imgData, 0, 0);
 
-          // 2. Render onto haloCanvas with full hardware bicubic upscaling + 48px Gaussian blur
-          // This creates a pure liquid color field with ZERO grid, ZERO spokes, and ZERO rings
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
-          ctx.imageSmoothingEnabled = true;
-          ctx.imageSmoothingQuality = 'high';
-          ctx.filter = 'blur(48px)';
-          ctx.drawImage(sCanvas, 0, 0, canvas.width, canvas.height);
-          ctx.filter = 'none';
+          // Exactly N intermediate nuances between screen edge (1.0) and black room (0.0)
+          const numIntervals = gradientSteps + 1;
+          const pos = u * numIntervals;
+          const stepIndex = Math.floor(pos);
+          if (stepIndex >= numIntervals) return 0;
 
-          // 3. Smooth, gentle 16:9 widescreen elliptical vignette (only 4 stops - zero polar grid)
-          const cx = canvas.width / 2;
-          const cy = canvas.height / 2;
-          ctx.save();
-          ctx.translate(cx, cy);
-          ctx.scale(1.0, cy / cx); // 16:9 widescreen oval matching TV aspect ratio
-          ctx.globalCompositeOperation = 'destination-in';
-          const vignette = ctx.createRadialGradient(0, 0, cx * 0.15, 0, 0, cx * 1.05);
-          vignette.addColorStop(0.00, 'rgba(0, 0, 0, 1.0)');
-          vignette.addColorStop(0.35, 'rgba(0, 0, 0, 0.85)');
-          vignette.addColorStop(0.70, 'rgba(0, 0, 0, 0.35)');
-          vignette.addColorStop(0.92, 'rgba(0, 0, 0, 0.08)');
-          vignette.addColorStop(1.00, 'rgba(0, 0, 0, 0.0)');
-          ctx.fillStyle = vignette;
-          ctx.fillRect(-cx * 2, -cx * 2, cx * 4, cx * 4);
-          ctx.restore();
+          const currentLevel = (numIntervals - stepIndex) / numIntervals;
+          const nextLevel = (numIntervals - stepIndex - 1) / numIntervals;
+          const frac = pos - stepIndex;
 
-          ctx.globalCompositeOperation = 'source-over';
-          texture.needsUpdate = true;
+          // 75% solid nuance band, 25% smooth gradient transition to next nuance (zero aliasing)
+          const plateau = 0.75;
+          if (frac < plateau) {
+            return currentLevel;
+          } else {
+            const blend = (frac - plateau) / (1 - plateau);
+            const s = blend * blend * (3 - 2 * blend);
+            return currentLevel + (nextLevel - currentLevel) * s;
+          }
+        };
+
+        // Hermite smooth S-curve sampling along an edge array (zero pixelation on color transitions)
+        const sampleEdgeSmooth = (arr: [number, number, number][], t: number): [number, number, number] => {
+          if (!arr || arr.length === 0) return [0, 0, 0];
+          const maxIdx = arr.length - 1;
+          const pos = Math.max(0, Math.min(1, t)) * maxIdx;
+          const i0 = Math.floor(pos);
+          const i1 = Math.min(maxIdx, i0 + 1);
+          const f = pos - i0;
+          const s = f * f * (3 - 2 * f); // Hermite cubic smoothstep
+          const c0 = arr[i0] || [0, 0, 0];
+          const c1 = arr[i1] || [0, 0, 0];
+          return [
+            c0[0] + (c1[0] - c0[0]) * s,
+            c0[1] + (c1[1] - c0[1]) * s,
+            c0[2] + (c1[2] - c0[2]) * s,
+          ];
+        };
+
+        // Direct typed buffer generation: guarantees ultra-fast rendering (0.2ms)
+        const imgData = ctx.createImageData(W, H);
+        const data32 = new Uint32Array(imgData.data.buffer);
+
+        for (let y = 0; y < H; y++) {
+          const rowOffset = y * W;
+
+          for (let x = 0; x < W; x++) {
+            let u = 0.0;
+            let col: [number, number, number] = [0, 0, 0];
+
+            if (y < screenY) {
+              if (x >= screenX && x <= screenRight) {
+                // Top band: pure vertical linear diffusion UPWARDS
+                u = (screenY - y) / screenY;
+                const t = (x - screenX) / screenW;
+                col = sampleEdgeSmooth(top, t);
+              } else if (x < screenX) {
+                // Top-Left corner: diagonal radial diffusion
+                const ux = (screenX - x) / screenX;
+                const uy = (screenY - y) / screenY;
+                u = Math.sqrt(ux * ux + uy * uy);
+                const angle = Math.atan2(uy, ux) / (Math.PI / 2);
+                const s = angle * angle * (3 - 2 * angle);
+                const cLeft = left[0] || [0, 0, 0];
+                const cTop = top[0] || [0, 0, 0];
+                col = [
+                  cLeft[0] * (1 - s) + cTop[0] * s,
+                  cLeft[1] * (1 - s) + cTop[1] * s,
+                  cLeft[2] * (1 - s) + cTop[2] * s,
+                ];
+              } else {
+                // Top-Right corner: diagonal radial diffusion
+                const ux = (x - screenRight) / (W - screenRight);
+                const uy = (screenY - y) / screenY;
+                u = Math.sqrt(ux * ux + uy * uy);
+                const angle = Math.atan2(uy, ux) / (Math.PI / 2);
+                const s = angle * angle * (3 - 2 * angle);
+                const cRight = right[0] || [0, 0, 0];
+                const cTop = top[top.length - 1] || [0, 0, 0];
+                col = [
+                  cRight[0] * (1 - s) + cTop[0] * s,
+                  cRight[1] * (1 - s) + cTop[1] * s,
+                  cRight[2] * (1 - s) + cTop[2] * s,
+                ];
+              }
+            } else if (y > screenBottom) {
+              if (x >= screenX && x <= screenRight) {
+                // Bottom band: pure vertical linear diffusion DOWNWARDS
+                u = (y - screenBottom) / (H - screenBottom);
+                const t = (x - screenX) / screenW;
+                col = sampleEdgeSmooth(bot, t);
+              } else if (x < screenX) {
+                // Bottom-Left corner: diagonal radial diffusion
+                const ux = (screenX - x) / screenX;
+                const uy = (y - screenBottom) / (H - screenBottom);
+                u = Math.sqrt(ux * ux + uy * uy);
+                const angle = Math.atan2(uy, ux) / (Math.PI / 2);
+                const s = angle * angle * (3 - 2 * angle);
+                const cLeft = left[left.length - 1] || [0, 0, 0];
+                const cBot = bot[0] || [0, 0, 0];
+                col = [
+                  cLeft[0] * (1 - s) + cBot[0] * s,
+                  cLeft[1] * (1 - s) + cBot[1] * s,
+                  cLeft[2] * (1 - s) + cBot[2] * s,
+                ];
+              } else {
+                // Bottom-Right corner: diagonal radial diffusion
+                const ux = (x - screenRight) / (W - screenRight);
+                const uy = (y - screenBottom) / (H - screenBottom);
+                u = Math.sqrt(ux * ux + uy * uy);
+                const angle = Math.atan2(uy, ux) / (Math.PI / 2);
+                const s = angle * angle * (3 - 2 * angle);
+                const cRight = right[right.length - 1] || [0, 0, 0];
+                const cBot = bot[bot.length - 1] || [0, 0, 0];
+                col = [
+                  cRight[0] * (1 - s) + cBot[0] * s,
+                  cRight[1] * (1 - s) + cBot[1] * s,
+                  cRight[2] * (1 - s) + cBot[2] * s,
+                ];
+              }
+            } else {
+              // Lateral bands and center area behind screen
+              if (x < screenX) {
+                // Left band: diffuse pure horizontally LEFTSWARDS
+                u = (screenX - x) / screenX;
+                const t = (y - screenY) / screenH;
+                col = sampleEdgeSmooth(left, t);
+              } else if (x > screenRight) {
+                // Right band: diffuse pure horizontally RIGHTWARDS
+                u = (x - screenRight) / (W - screenRight);
+                const t = (y - screenY) / screenH;
+                col = sampleEdgeSmooth(right, t);
+              } else {
+                // Inside the screen boundary (behind the video mesh):
+                // Fill seamlessly with closest edge color so there is NEVER a black gap/border!
+                u = 0.0;
+                const distL = x - screenX;
+                const distR = screenRight - x;
+                const distT = y - screenY;
+                const distB = screenBottom - y;
+                const minDist = Math.min(distL, distR, distT, distB);
+                if (minDist === distT) {
+                  col = sampleEdgeSmooth(top, (x - screenX) / screenW);
+                } else if (minDist === distB) {
+                  col = sampleEdgeSmooth(bot, (x - screenX) / screenW);
+                } else if (minDist === distL) {
+                  col = sampleEdgeSmooth(left, (y - screenY) / screenH);
+                } else {
+                  col = sampleEdgeSmooth(right, (y - screenY) / screenH);
+                }
+              }
+            }
+
+            // Luminance check: smooth fade to black (zero hard threshold cuts or pixelated bands)
+            const lum = (col[0] * 0.299 + col[1] * 0.587 + col[2] * 0.114) / 255;
+            const blackFade = Math.max(0, Math.min(1, (lum - 0.015) / 0.045));
+            if (u >= 1.0 || blackFade <= 0.001) {
+              data32[rowOffset + x] = 0;
+              continue;
+            }
+
+            const bFactor = computeB(u) * glowAlpha * blackFade;
+            const a = Math.max(0, Math.min(255, Math.round(bFactor * 255)));
+            if (a === 0) {
+              data32[rowOffset + x] = 0;
+              continue;
+            }
+
+            const r = Math.max(0, Math.min(255, Math.round(col[0])));
+            const g = Math.max(0, Math.min(255, Math.round(col[1])));
+            const b = Math.max(0, Math.min(255, Math.round(col[2])));
+
+            // Pack 32-bit little-endian RGBA: (A << 24) | (B << 16) | (G << 8) | R
+            data32[rowOffset + x] = (a << 24) | (b << 16) | (g << 8) | r;
+          }
         }
+
+        ctx.putImageData(imgData, 0, 0);
+
+        // Soft optical diffusion pass: smoothly melts all transitions, black corners, and colors into a dreamy continuous glow
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.save();
+        ctx.filter = 'blur(10px)';
+        ctx.drawImage(canvas, 0, 0);
+        ctx.restore();
+
+        texture.needsUpdate = true;
       }
     }
 
-    // Dynamic 3D lights updating in Three.js around the perimeter (Edge-Empowered)
+    // Dynamic 3D lights updating in Three.js around the perimeter (Edge-Empowered with Black detection)
     const { ambient, top, bottom, left, right } = lightsRef.current;
     const mult = typeof ambilightConfig.intensity === 'number' && isFinite(ambilightConfig.intensity) ? ambilightConfig.intensity : 1;
     const wallReflect = typeof ambilightConfig.wallReflection === 'number' && isFinite(ambilightConfig.wallReflection) ? ambilightConfig.wallReflection : 0.7;
 
-    // Ambient room color: neutral dark cinema velvet (so it never washes out or tints edge colors!)
-    ambient.color.setHex(0x0a0f1d);
-    ambient.intensity = 0.12 * mult;
+    // Ambient room color: neutral dark cinema velvet (never washes out or tints edge colors!)
+    ambient.color.setHex(0x080c18);
+    ambient.intensity = 0.1 * mult;
 
-    // Top Light (Empowered strictly by top edge zones)
+    // Top Light (Empowered strictly by top edge zones, completely OFF if top is black)
     const topAvg = calcAvgColor(ambilightData.top);
     const [tR, tG, tB] = toSafeRgbFloat(topAvg);
     top.color.setRGB(tR, tG, tB);
-    top.intensity = 3.6 * mult * wallReflect;
+    const topLum = tR * 0.299 + tG * 0.587 + tB * 0.114;
+    top.intensity = topLum < 0.025 ? 0 : 3.6 * mult * wallReflect * Math.min(1, topLum * 2.2);
 
-    // Bottom Light (Empowered strictly by bottom edge zones)
+    // Bottom Light (Empowered strictly by bottom edge zones, completely OFF if bottom is black)
     const botAvg = calcAvgColor(ambilightData.bottom);
     const [bR, bG, bB] = toSafeRgbFloat(botAvg);
     bottom.color.setRGB(bR, bG, bB);
-    bottom.intensity = 3.2 * mult * wallReflect;
+    const botLum = bR * 0.299 + bG * 0.587 + bB * 0.114;
+    bottom.intensity = botLum < 0.025 ? 0 : 3.2 * mult * wallReflect * Math.min(1, botLum * 2.2);
 
-    // Left Light (Empowered strictly by left edge zones)
+    // Left Light (Empowered strictly by left edge zones, completely OFF if left is black)
     const leftAvg = calcAvgColor(ambilightData.left);
     const [lR, lG, lB] = toSafeRgbFloat(leftAvg);
     left.color.setRGB(lR, lG, lB);
-    left.intensity = 3.2 * mult * wallReflect;
+    const leftLum = lR * 0.299 + lG * 0.587 + lB * 0.114;
+    left.intensity = leftLum < 0.025 ? 0 : 3.2 * mult * wallReflect * Math.min(1, leftLum * 2.2);
 
-    // Right Light (Empowered strictly by right edge zones)
+    // Right Light (Empowered strictly by right edge zones, completely OFF if right is black)
     const rightAvg = calcAvgColor(ambilightData.right);
     const [rR, rG, rB] = toSafeRgbFloat(rightAvg);
     right.color.setRGB(rR, rG, rB);
-    right.intensity = 3.2 * mult * wallReflect;
+    const rightLum = rR * 0.299 + rG * 0.587 + rB * 0.114;
+    right.intensity = rightLum < 0.025 ? 0 : 3.2 * mult * wallReflect * Math.min(1, rightLum * 2.2);
   }, [ambilightData, ambilightConfig]);
+
+  // WebXR Exit Function
+  const handleExitVR = async () => {
+    try {
+      const session = sessionRef.current || rendererRef.current?.xr?.getSession();
+      if (session) {
+        await session.end();
+      }
+    } catch (err) {
+      console.warn('WebXR end session error:', err);
+    } finally {
+      sessionRef.current = null;
+      setIsVRPresenting(false);
+    }
+  };
 
   // WebXR Launch Function
   const handleLaunchVR = async () => {
@@ -849,11 +1107,42 @@ export const VRCanvas: React.FC<VRCanvasProps> = ({
     try {
       const xr = (navigator as any).xr;
       if (xr) {
-        const session = await xr.requestSession('immersive-vr', {
-          optionalFeatures: ['local-floor', 'bounded-floor', 'hand-tracking'],
-        });
+        // Try local-floor first (ideal for standing / seated Quest 3S), fall back to local
+        let session: any;
+        try {
+          session = await xr.requestSession('immersive-vr', {
+            requiredFeatures: ['local-floor'],
+            optionalFeatures: ['bounded-floor', 'hand-tracking'],
+          });
+          await rendererRef.current.xr.setReferenceSpaceType('local-floor');
+        } catch {
+          session = await xr.requestSession('immersive-vr', {
+            optionalFeatures: ['local', 'hand-tracking'],
+          });
+          await rendererRef.current.xr.setReferenceSpaceType('local');
+        }
+
+        sessionRef.current = session;
         await rendererRef.current.xr.setSession(session);
         setIsVRPresenting(true);
+
+        // Ensure video is playing and texture is active
+        if (videoRef.current) {
+          if (videoRef.current.paused) {
+            videoRef.current.play().catch(() => {});
+          }
+          if (videoTextureRef.current) {
+            videoTextureRef.current.needsUpdate = true;
+          }
+        }
+
+        session.addEventListener('end', () => {
+          sessionRef.current = null;
+          setIsVRPresenting(false);
+          if (cameraRef.current) {
+            cameraRef.current.position.set(0, 1.4, 0);
+          }
+        });
       }
     } catch (err) {
       console.warn('WebXR requestSession failed or rejected:', err);
@@ -927,6 +1216,23 @@ export const VRCanvas: React.FC<VRCanvasProps> = ({
               Entrer en VR (Quest 3S)
             </button>
           )}
+        </div>
+      )}
+
+      {/* When presenting in VR, show Exit VR button in 2D preview */}
+      {isVRPresenting && (
+        <div className="absolute top-4 right-4 z-50 flex items-center gap-2 pointer-events-auto">
+          <button
+            onClick={handleExitVR}
+            className="px-4 py-2.5 bg-red-600/90 hover:bg-red-500 text-white font-bold rounded-xl shadow-2xl transition-all text-xs flex items-center gap-2 border border-red-400/50 backdrop-blur-md"
+          >
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+              <polyline points="16 17 21 12 16 7" />
+              <line x1="21" y1="12" x2="9" y2="12" />
+            </svg>
+            Quitter le mode VR
+          </button>
         </div>
       )}
     </div>

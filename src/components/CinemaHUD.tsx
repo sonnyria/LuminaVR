@@ -15,6 +15,7 @@ import {
   Compass,
   HelpCircle,
   FolderOpen,
+  Globe,
 } from 'lucide-react';
 import {
   AmbilightConfig,
@@ -35,8 +36,10 @@ interface CinemaHUDProps {
   currentVideo: VideoItem;
   ambilightConfig: AmbilightConfig;
   onUpdateAmbilight: (updates: Partial<AmbilightConfig>) => void;
+  onResetAmbilight?: () => void;
   screenConfig: ScreenConfig;
   onUpdateScreen: (updates: Partial<ScreenConfig>) => void;
+  onResetScreen?: () => void;
   environment: EnvironmentType;
   onChangeEnvironment: (env: EnvironmentType) => void;
   ambilightData: AmbilightSampleData;
@@ -59,8 +62,10 @@ export const CinemaHUD: React.FC<CinemaHUDProps> = ({
   currentVideo,
   ambilightConfig,
   onUpdateAmbilight,
+  onResetAmbilight,
   screenConfig,
   onUpdateScreen,
+  onResetScreen,
   environment,
   onChangeEnvironment,
   ambilightData,
@@ -196,10 +201,11 @@ export const CinemaHUD: React.FC<CinemaHUDProps> = ({
 
           <button
             onClick={onOpenVideoSelector}
-            className="px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-800/60 rounded-lg transition-colors flex items-center gap-1.5"
+            className="px-3 py-1.5 text-xs font-semibold text-sky-300 bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/30 rounded-lg transition-all flex items-center gap-1.5 shadow-sm"
+            title="Ouvrir le navigateur de streaming (YouTube, Netflix, etc.) et vos films"
           >
-            <FolderOpen className="w-3.5 h-3.5 text-slate-400" />
-            Changer de film
+            <Globe className="w-3.5 h-3.5 text-sky-400" />
+            <span>Navigateur & Films</span>
           </button>
         </nav>
 
@@ -305,6 +311,39 @@ export const CinemaHUD: React.FC<CinemaHUDProps> = ({
               />
             </div>
 
+            {/* Gradient steps / Nuances de dégradé vers le noir */}
+            <div className="space-y-1 p-2.5 rounded-xl bg-slate-950/60 border border-slate-800/80">
+              <div className="flex justify-between text-xs">
+                <span className="text-slate-300 font-medium">Nuances vers le noir</span>
+                <span className="font-mono text-amber-400 font-semibold">
+                  {!ambilightConfig.gradientSteps || ambilightConfig.gradientSteps === 0
+                    ? 'Continu (Fluide)'
+                    : ambilightConfig.gradientSteps === 1
+                    ? '1 nuance'
+                    : `${ambilightConfig.gradientSteps} nuances`}
+                </span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="16"
+                step="1"
+                value={ambilightConfig.gradientSteps ?? 0}
+                onChange={(e) => onUpdateAmbilight({ gradientSteps: parseInt(e.target.value) })}
+                className="w-full accent-amber-500 bg-slate-800 h-1.5 rounded-lg appearance-none cursor-pointer"
+              />
+              <div className="flex justify-between text-[10px] text-slate-500">
+                <span>Continu</span>
+                <span>2 nuances</span>
+                <span>4</span>
+                <span>8</span>
+                <span>16</span>
+              </div>
+              <p className="text-[10px] text-slate-400 leading-tight pt-0.5">
+                Règle le nombre de paliers de couleur entre le bord de l'écran et le noir de la salle.
+              </p>
+            </div>
+
             {/* Saturation boost */}
             <div className="space-y-1">
               <div className="flex justify-between text-xs">
@@ -338,6 +377,19 @@ export const CinemaHUD: React.FC<CinemaHUDProps> = ({
                 className="w-full accent-amber-500 bg-slate-800 h-1.5 rounded-lg appearance-none cursor-pointer"
               />
             </div>
+
+            {onResetAmbilight && (
+              <div className="pt-2 border-t border-slate-800/80 flex justify-end">
+                <button
+                  onClick={onResetAmbilight}
+                  className="text-[11px] text-slate-400 hover:text-amber-400 flex items-center gap-1.5 transition-colors py-1 px-2 rounded-lg hover:bg-slate-800/60"
+                  title="Rétablir les valeurs Ambilight par défaut"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                  <span>Réinitialiser Ambilight</span>
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -453,6 +505,19 @@ export const CinemaHUD: React.FC<CinemaHUDProps> = ({
                 ))}
               </div>
             </div>
+
+            {onResetScreen && (
+              <div className="pt-2 border-t border-slate-800/80 flex justify-end">
+                <button
+                  onClick={onResetScreen}
+                  className="text-[11px] text-slate-400 hover:text-sky-400 flex items-center gap-1.5 transition-colors py-1 px-2 rounded-lg hover:bg-slate-800/60"
+                  title="Rétablir les valeurs d'écran par défaut"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                  <span>Réinitialiser Écran</span>
+                </button>
+              </div>
+            )}
           </div>
         )}
 

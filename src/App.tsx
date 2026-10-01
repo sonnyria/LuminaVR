@@ -27,16 +27,71 @@ const INITIAL_VIDEO: VideoItem = {
   url: '',
 };
 
+// Default configurations
+const DEFAULT_AMBILIGHT_CONFIG: AmbilightConfig = {
+  enabled: true,
+  intensity: 1.25,
+  spread: 1.8,
+  saturation: 1.4,
+  smoothing: 0.15,
+  zones: 32,
+  mode: 'theater',
+  wallReflection: 0.7,
+  gradientSteps: 0,
+};
+
+const DEFAULT_SCREEN_CONFIG: ScreenConfig = {
+  curvature: 0.35, // 35% IMAX curve
+  distance: 3.4,   // 3.4 meters
+  size: 1.2,       // 120% scale
+  heightOffset: 0.1,
+  tilt: 0,         // 0° default, can tilt for bed mode
+  format3D: '2d',
+  aspectRatio: '16:9',
+};
+
+const DEFAULT_ENVIRONMENT: EnvironmentType = 'cinema';
+
+const STORAGE_KEYS = {
+  AMBILIGHT: 'luminavr_ambilight_config',
+  SCREEN: 'luminavr_screen_config',
+  ENVIRONMENT: 'luminavr_environment',
+  VOLUME: 'luminavr_volume',
+};
+
+function loadStoredConfig<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return fallback;
+    const parsed = JSON.parse(raw);
+    return { ...fallback, ...parsed };
+  } catch (err) {
+    console.warn(`Could not load settings for ${key}:`, err);
+    return fallback;
+  }
+}
+
 export default function App() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const extractorRef = useRef<AmbilightExtractor>(new AmbilightExtractor());
+  const streamRef = useRef<MediaStream | null>(null);
 
   // Current Video
   const [currentVideo, setCurrentVideo] = useState<VideoItem>(INITIAL_VIDEO);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [volume, setVolume] = useState(1);
+  const [isStreamActive, setIsStreamActive] = useState(false);
+  const [volume, setVolume] = useState<number>(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEYS.VOLUME);
+      if (stored !== null) {
+        const parsed = parseFloat(stored);
+        if (!isNaN(parsed) && parsed >= 0 && parsed <= 1) return parsed;
+      }
+    } catch {}
+    return 1;
+  });
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isVRPresenting, setIsVRPresenting] = useState(false);
 
@@ -44,31 +99,63 @@ export default function App() {
   const [isVideoModalOpen, setIsVideoModalOpen] = useState(false);
   const [isGuideModalOpen, setIsGuideModalOpen] = useState(false);
 
-  // Ambilight Configuration
-  const [ambilightConfig, setAmbilightConfig] = useState<AmbilightConfig>({
-    enabled: true,
-    intensity: 1.25,
-    spread: 1.8,
-    saturation: 1.4,
-    smoothing: 0.15,
-    zones: 32,
-    mode: 'theater',
-    wallReflection: 0.7,
+  // Ambilight Configuration (Persisted across sessions)
+  const [ambilightConfig, setAmbilightConfig] = useState<AmbilightConfig>(() =>
+    loadStoredConfig(STORAGE_KEYS.AMBILIGHT, DEFAULT_AMBILIGHT_CONFIG)
+  );
+
+  // Screen Ergonomics (Persisted across sessions)
+  const [screenConfig, setScreenConfig] = useState<ScreenConfig>(() =>
+    loadStoredConfig(STORAGE_KEYS.SCREEN, DEFAULT_SCREEN_CONFIG)
+  );
+
+  // Virtual Theater Environment (Persisted across sessions)
+  const [environment, setEnvironment] = useState<EnvironmentType>(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEYS.ENVIRONMENT);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (['cinema', 'void', 'lounge', 'cosmic'].includes(parsed)) return parsed;
+      }
+    } catch {}
+    return DEFAULT_ENVIRONMENT;
   });
 
-  // Screen Ergonomics (Optimized for Meta Quest 3S)
-  const [screenConfig, setScreenConfig] = useState<ScreenConfig>({
-    curvature: 0.35, // 35% IMAX curve
-    distance: 3.4,   // 3.4 meters
-    size: 1.2,       // 120% scale
-    heightOffset: 0.1,
-    tilt: 0,         // 0° default, can tilt for bed mode
-    format3D: '2d',
-    aspectRatio: '16:9',
-  });
+  // Auto-persist Ambilight configuration
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.AMBILIGHT, JSON.stringify(ambilightConfig));
+    } catch (e) {
+      console.warn('Storage save failed:', e);
+    }
+  }, [ambilightConfig]);
 
-  // Virtual Theater Environment
-  const [environment, setEnvironment] = useState<EnvironmentType>('cinema');
+  // Auto-persist Screen ergonomics
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.SCREEN, JSON.stringify(screenConfig));
+    } catch (e) {
+      console.warn('Storage save failed:', e);
+    }
+  }, [screenConfig]);
+
+  // Auto-persist Environment
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.ENVIRONMENT, JSON.stringify(environment));
+    } catch (e) {
+      console.warn('Storage save failed:', e);
+    }
+  }, [environment]);
+
+  // Auto-persist Volume
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.VOLUME, JSON.stringify(volume));
+    } catch (e) {
+      console.warn('Storage save failed:', e);
+    }
+  }, [volume]);
 
   // Real-time Ambilight Sample Data
   const [ambilightData, setAmbilightData] = useState<AmbilightSampleData>({
@@ -87,6 +174,14 @@ export default function App() {
 
   const handleUpdateScreen = useCallback((updates: Partial<ScreenConfig>) => {
     setScreenConfig((prev) => ({ ...prev, ...updates }));
+  }, []);
+
+  const handleResetAmbilight = useCallback(() => {
+    setAmbilightConfig(DEFAULT_AMBILIGHT_CONFIG);
+  }, []);
+
+  const handleResetScreen = useCallback(() => {
+    setScreenConfig(DEFAULT_SCREEN_CONFIG);
   }, []);
 
   // Play / Pause toggle
@@ -128,17 +223,111 @@ export default function App() {
 
   // Select video
   const handleSelectVideo = useCallback((video: VideoItem) => {
+    // If switching away from live stream, stop tracks
+    if (streamRef.current && !video.isStream) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+      setIsStreamActive(false);
+    }
     setCurrentVideo(video);
+  }, []);
+
+  // Start Browser Tab / Screen capture (YouTube, Netflix, Twitch, etc.)
+  const handleStartTabCapture = useCallback(async () => {
+    try {
+      if (!navigator.mediaDevices?.getDisplayMedia) {
+        alert("La capture de flux navigateur n'est pas supportée sur ce navigateur.");
+        return;
+      }
+
+      // Stop previous stream if any
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
+      }
+
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: {
+          displaySurface: 'browser' as any,
+        },
+        audio: true,
+      });
+
+      streamRef.current = stream;
+      const video = videoRef.current;
+      if (video) {
+        video.src = '';
+        video.srcObject = stream;
+        video.volume = volume;
+        video.muted = false;
+        video.play().catch(() => {});
+      }
+
+      const videoTrack = stream.getVideoTracks()[0];
+      const streamLabel = videoTrack?.label || 'Onglet Navigateur en direct';
+
+      const streamItem: VideoItem = {
+        id: `stream-${Date.now()}`,
+        title: streamLabel.toLowerCase().includes('tab') || streamLabel.toLowerCase().includes('onglet')
+          ? 'Navigateur Web (YouTube / Netflix / Stream)'
+          : streamLabel,
+        subtitle: 'Flux navigateur en direct avec Ambilight IMAX',
+        category: 'Navigateur Web',
+        aspectRatio: '16:9',
+        isLocal: false,
+        isStream: true,
+        description: 'Diffusion temps réel de votre onglet ou fenêtre de streaming avec Ambilight 60 FPS.',
+        url: 'stream://display-media',
+      };
+
+      videoTrack.onended = () => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = null;
+        }
+        streamRef.current = null;
+        setIsStreamActive(false);
+        setIsPlaying(false);
+      };
+
+      setCurrentVideo(streamItem);
+      setIsStreamActive(true);
+      setIsPlaying(true);
+      setIsVideoModalOpen(false);
+    } catch (err: any) {
+      if (err.name !== 'NotAllowedError') {
+        console.warn('Capture error:', err);
+      }
+    }
+  }, [volume]);
+
+  // Stop Browser Tab capture
+  const handleStopTabCapture = useCallback(() => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+    setIsStreamActive(false);
+    setIsPlaying(false);
   }, []);
 
   // Synchronize and load video when currentVideo changes
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !currentVideo.url) return;
+    if (currentVideo.isStream) return; // Managed via MediaStream srcObject
+
+    // Clear any previous media stream
+    if (video.srcObject) {
+      video.srcObject = null;
+    }
 
     setIsPlaying(false);
     setCurrentTime(0);
 
+    video.src = currentVideo.url;
     video.volume = volume;
     video.muted = false;
 
@@ -150,12 +339,11 @@ export default function App() {
           setIsPlaying(true);
         })
         .catch((err) => {
-          // Autoplay restricted until direct user interaction
           console.log('Autoplay restriction (click to play):', err.name);
           setIsPlaying(false);
         });
     }
-  }, [currentVideo.url, volume]);
+  }, [currentVideo.url, currentVideo.isStream, volume]);
 
   // Fullscreen toggle
   const handleToggleFullscreen = useCallback(() => {
@@ -331,24 +519,22 @@ export default function App() {
 
   return (
     <main className="relative w-screen h-screen bg-[#020408] text-white overflow-hidden select-none font-sans">
-      {/* Video Element rendered invisibly in layout to guarantee GPU frame updates */}
+      {/* Video Element: must have opacity: 1 so Meta Quest Browser / Chromium does NOT throttle the hardware video decoder */}
       <video
         ref={videoRef}
-        src={currentVideo.url}
+        src={currentVideo.url || undefined}
         crossOrigin={currentVideo.isLocal ? undefined : 'anonymous'}
         playsInline
         preload="auto"
         style={{
           position: 'fixed',
-          bottom: 0,
+          top: 0,
           left: 0,
-          width: '320px',
-          height: '180px',
-          opacity: 0.01,
+          width: '64px',
+          height: '36px',
+          opacity: 1,
+          zIndex: 0,
           pointerEvents: 'none',
-          zIndex: -999,
-          transform: 'scale(0.01)',
-          transformOrigin: 'bottom left',
         }}
       />
 
@@ -406,8 +592,10 @@ export default function App() {
         currentVideo={currentVideo}
         ambilightConfig={ambilightConfig}
         onUpdateAmbilight={handleUpdateAmbilight}
+        onResetAmbilight={handleResetAmbilight}
         screenConfig={screenConfig}
         onUpdateScreen={handleUpdateScreen}
+        onResetScreen={handleResetScreen}
         environment={environment}
         onChangeEnvironment={setEnvironment}
         ambilightData={ambilightData}
@@ -419,12 +607,15 @@ export default function App() {
         onToggleFullscreen={handleToggleFullscreen}
       />
 
-      {/* Video Selection Modal (Local file, Streaming link) */}
+      {/* Video Selection Modal (Local file, Streaming link, Browser tab capture) */}
       <VideoSelectorModal
         isOpen={isVideoModalOpen}
         onClose={() => setIsVideoModalOpen(false)}
         currentVideo={currentVideo}
         onSelectVideo={handleSelectVideo}
+        onStartTabCapture={handleStartTabCapture}
+        onStopTabCapture={handleStopTabCapture}
+        isStreamActive={isStreamActive}
       />
 
       {/* Meta Quest 3S Guide & Tips Modal */}

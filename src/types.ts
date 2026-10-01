@@ -9,6 +9,7 @@ export interface AmbilightConfig {
   zones: number;      // 16, 32, 64
   mode: AmbilightMode;
   wallReflection: number; // 0 to 1 (intensity of room wall bounce)
+  gradientSteps?: number; // 0 = Continu (fluide), 1 à 16 = nombre de nuances de dégradé entre l'écran et le noir
 }
 
 export type ScreenCurvature = 'flat' | 'subtle' | 'imax' | 'deep';
@@ -34,6 +35,7 @@ export interface VideoItem {
   category: string;
   aspectRatio?: string;
   isLocal?: boolean;
+  isStream?: boolean;
   fileSize?: string;
   description: string;
 }
