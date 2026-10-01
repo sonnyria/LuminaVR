@@ -65,6 +65,7 @@ export const VRCanvas: React.FC<VRCanvasProps> = ({
   const vrUITextureRef = useRef<THREE.CanvasTexture | null>(null);
   const sessionRef = useRef<any>(null);
   const bOrYWasPressedRef = useRef(false);
+  const vrSessionEnterTimeRef = useRef(0);
 
   // Mouse look state for 2D desktop / Quest window preview
   const isDraggingRef = useRef(false);
@@ -180,12 +181,17 @@ export const VRCanvas: React.FC<VRCanvasProps> = ({
       scene.add(controller);
 
       controller.addEventListener('selectstart', () => {
-        // Check if pointing at In-VR 3D HUD
-        if (vrUIMeshRef.current && vrUIMeshRef.current.visible) {
-          tempMatrix.identity().extractRotation(controller.matrixWorld);
-          raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
-          raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
+        // Discard any trigger clicks during the first 1200ms of entering VR (prevents entrance click from triggering actions)
+        if (Date.now() - vrSessionEnterTimeRef.current < 1200) {
+          return;
+        }
 
+        tempMatrix.identity().extractRotation(controller.matrixWorld);
+        raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
+        raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
+
+        // 1. Check if pointing at In-VR 3D HUD
+        if (vrUIMeshRef.current && vrUIMeshRef.current.visible) {
           const intersects = raycaster.intersectObject(vrUIMeshRef.current);
           if (intersects.length > 0 && intersects[0].uv) {
             const uv = intersects[0].uv;
@@ -222,8 +228,16 @@ export const VRCanvas: React.FC<VRCanvasProps> = ({
           }
         }
 
-        // Click outside HUD toggles Play / Pause
-        onTogglePlay();
+        // 2. Check if pointing directly at the cinema screen mesh
+        if (screenMeshRef.current) {
+          const screenHits = raycaster.intersectObject(screenMeshRef.current);
+          if (screenHits.length > 0) {
+            onTogglePlay();
+            return;
+          }
+        }
+
+        // Clicking outside the HUD and outside the screen in empty space does NOTHING (prevents accidental pausing)
       });
 
       controllers.push(controller);
@@ -233,10 +247,21 @@ export const VRCanvas: React.FC<VRCanvasProps> = ({
 
     // WebXR Session State Listeners
     renderer.xr.addEventListener('sessionstart', () => {
+      vrSessionEnterTimeRef.current = Date.now();
       setIsVRPresenting(true);
-      if (videoRef.current && videoRef.current.paused) {
-        videoRef.current.play().catch(() => {});
+
+      const video = videoRef.current;
+      if (video) {
+        // Ensure video is playing and not stalled
+        video.muted = false;
+        const playPromise = video.play();
+        if (playPromise !== undefined) {
+          playPromise.catch((err) => {
+            console.warn('Playback resume on sessionstart:', err);
+          });
+        }
       }
+
       if (videoTextureRef.current) {
         videoTextureRef.current.needsUpdate = true;
       }
@@ -248,6 +273,28 @@ export const VRCanvas: React.FC<VRCanvasProps> = ({
       camera.position.set(0, 1.4, 0);
       cameraRotationRef.current = { yaw: 0, pitch: 0 };
     });
+
+    // Register WebXR offerSession for Meta Quest Browser
+    // This allows Meta Quest Browser's native "Entrer en mode immersif" button to seamlessly connect to Three.js
+    if ('xr' in navigator && typeof (navigator as any).xr?.offerSession === 'function') {
+      const offerOptions = {
+        optionalFeatures: ['local-floor', 'bounded-floor', 'hand-tracking', 'layers'],
+      };
+      (navigator as any).xr.offerSession('immersive-vr', offerOptions)
+        .then(async (session: any) => {
+          sessionRef.current = session;
+          await renderer.xr.setSession(session);
+          setIsVRPresenting(true);
+          const video = videoRef.current;
+          if (video) {
+            video.muted = false;
+            video.play().catch(() => {});
+          }
+        })
+        .catch((err: any) => {
+          console.warn('offerSession registration notice:', err);
+        });
+    }
 
     // In-VR floating HUD setup (640x140 high resolution canvas)
     const vrUICanvas = document.createElement('canvas');
@@ -1190,32 +1237,20 @@ export const VRCanvas: React.FC<VRCanvasProps> = ({
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
     >
-      {/* VR Quick Status Overlay if WebXR ready */}
+      {/* 2D View Controls (discreetly positioned at bottom-right, keeping top-right clean for native browser controls) */}
       {!isVRPresenting && (
-        <div className="absolute top-4 right-4 z-20 flex items-center gap-2 pointer-events-auto">
+        <div className="absolute bottom-24 right-4 z-20 flex items-center gap-2 pointer-events-auto">
           <button
             onClick={handleRecenter}
-            title="Recentrer la vue"
-            className="p-2 bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-white rounded-lg border border-slate-700/50 backdrop-blur-sm transition-colors text-xs flex items-center gap-1.5"
+            title="Recentrer la vue 2D"
+            className="p-2 bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-white rounded-lg border border-slate-700/50 backdrop-blur-sm transition-colors text-xs flex items-center gap-1.5 shadow-lg"
           >
             <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <circle cx="12" cy="12" r="10" />
               <path d="M12 8v8M8 12h8" />
             </svg>
-            Recentrer
+            Recentrer la vue
           </button>
-
-          {xrSupported && (
-            <button
-              onClick={handleLaunchVR}
-              className="px-3.5 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-semibold rounded-lg shadow-lg shadow-amber-500/25 transition-all text-xs flex items-center gap-2"
-            >
-              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M21 7.28a3.5 3.5 0 0 0-3.5-3.5H6.5A3.5 3.5 0 0 0 3 7.28v9.44A3.5 3.5 0 0 0 6.5 20.22h11a3.5 3.5 0 0 0 3.5-3.5V7.28ZM7.5 13.5a2 2 0 1 1 0-4 2 2 0 0 1 0 4Zm9 0a2 2 0 1 1 0-4 2 2 0 0 1 0 4Z"/>
-              </svg>
-              Entrer en VR (Quest 3S)
-            </button>
-          )}
         </div>
       )}
 

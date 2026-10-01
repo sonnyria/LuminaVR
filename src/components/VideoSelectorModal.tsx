@@ -19,6 +19,7 @@ interface VideoSelectorModalProps {
   onStartTabCapture?: () => Promise<void>;
   onStopTabCapture?: () => void;
   isStreamActive?: boolean;
+  onOpenStreamWindow?: (url: string) => void;
 }
 
 export const VideoSelectorModal: React.FC<VideoSelectorModalProps> = ({
@@ -29,6 +30,7 @@ export const VideoSelectorModal: React.FC<VideoSelectorModalProps> = ({
   onStartTabCapture,
   onStopTabCapture,
   isStreamActive = false,
+  onOpenStreamWindow,
 }) => {
   const [activeTab, setActiveTab] = useState<'browser' | 'stream' | 'local'>('browser');
   const [customUrl, setCustomUrl] = useState('');
@@ -225,14 +227,19 @@ export const VideoSelectorModal: React.FC<VideoSelectorModalProps> = ({
               {/* Quick Launch Websites in New Tab */}
               <div className="space-y-2">
                 <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider block">
-                  1. Ouvrir votre service de streaming dans un onglet :
+                  1. Ouvrir votre service de streaming :
                 </label>
                 <div className="grid grid-cols-3 gap-2">
-                  <a
-                    href="https://www.youtube.com"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="p-3 bg-slate-950/60 hover:bg-slate-850 rounded-xl border border-slate-800 hover:border-red-500/50 transition-all flex items-center justify-between group"
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (onOpenStreamWindow) {
+                        onOpenStreamWindow('https://www.youtube.com');
+                      } else {
+                        window.open('https://www.youtube.com', '_blank');
+                      }
+                    }}
+                    className="p-3 bg-slate-950/60 hover:bg-slate-850 rounded-xl border border-slate-800 hover:border-red-500/50 transition-all flex items-center justify-between group text-left"
                   >
                     <div className="flex items-center gap-2.5">
                       <div className="w-7 h-7 rounded-lg bg-red-600/20 text-red-500 flex items-center justify-center font-bold text-xs border border-red-500/30">
@@ -241,13 +248,18 @@ export const VideoSelectorModal: React.FC<VideoSelectorModalProps> = ({
                       <span className="text-xs font-medium text-slate-200 group-hover:text-white">YouTube</span>
                     </div>
                     <ExternalLink className="w-3.5 h-3.5 text-slate-500 group-hover:text-red-400 transition-colors" />
-                  </a>
+                  </button>
 
-                  <a
-                    href="https://www.netflix.com"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="p-3 bg-slate-950/60 hover:bg-slate-850 rounded-xl border border-slate-800 hover:border-red-600/50 transition-all flex items-center justify-between group"
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (onOpenStreamWindow) {
+                        onOpenStreamWindow('https://www.netflix.com');
+                      } else {
+                        window.open('https://www.netflix.com', '_blank');
+                      }
+                    }}
+                    className="p-3 bg-slate-950/60 hover:bg-slate-850 rounded-xl border border-slate-800 hover:border-red-600/50 transition-all flex items-center justify-between group text-left"
                   >
                     <div className="flex items-center gap-2.5">
                       <div className="w-7 h-7 rounded-lg bg-red-900/30 text-red-500 flex items-center justify-center font-bold text-xs border border-red-600/30">
@@ -256,13 +268,18 @@ export const VideoSelectorModal: React.FC<VideoSelectorModalProps> = ({
                       <span className="text-xs font-medium text-slate-200 group-hover:text-white">Netflix</span>
                     </div>
                     <ExternalLink className="w-3.5 h-3.5 text-slate-500 group-hover:text-red-400 transition-colors" />
-                  </a>
+                  </button>
 
-                  <a
-                    href="https://www.twitch.tv"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="p-3 bg-slate-950/60 hover:bg-slate-850 rounded-xl border border-slate-800 hover:border-purple-500/50 transition-all flex items-center justify-between group"
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (onOpenStreamWindow) {
+                        onOpenStreamWindow('https://www.twitch.tv');
+                      } else {
+                        window.open('https://www.twitch.tv', '_blank');
+                      }
+                    }}
+                    className="p-3 bg-slate-950/60 hover:bg-slate-850 rounded-xl border border-slate-800 hover:border-purple-500/50 transition-all flex items-center justify-between group text-left"
                   >
                     <div className="flex items-center gap-2.5">
                       <div className="w-7 h-7 rounded-lg bg-purple-600/20 text-purple-400 flex items-center justify-center font-bold text-xs border border-purple-500/30">
@@ -271,8 +288,24 @@ export const VideoSelectorModal: React.FC<VideoSelectorModalProps> = ({
                       <span className="text-xs font-medium text-slate-200 group-hover:text-white">Twitch</span>
                     </div>
                     <ExternalLink className="w-3.5 h-3.5 text-slate-500 group-hover:text-purple-400 transition-colors" />
-                  </a>
+                  </button>
                 </div>
+              </div>
+
+              {/* Anti-Echo and Window Management Tip */}
+              <div className="p-3.5 bg-sky-950/30 rounded-xl border border-sky-500/30 text-xs text-slate-300 space-y-1.5">
+                <div className="font-semibold text-sky-400 flex items-center gap-1.5">
+                  <Sparkles className="w-4 h-4" />
+                  Anti-Écho & Contrôle de l'onglet YouTube :
+                </div>
+                <ul className="list-disc list-inside space-y-1 pl-1 text-[11px] text-slate-300 leading-relaxed">
+                  <li>
+                    <strong>Son en double (Écho) :</strong> Par défaut, LuminaVR coupe son propre son en mode stream pour laisser place au son direct parfait de YouTube sans aucun retard. Vous pouvez basculer le mode via le bouton <em>Anti-Écho</em> de la barre de contrôle.
+                  </li>
+                  <li>
+                    <strong>Cacher & Réafficher YouTube :</strong> Réduisez la fenêtre YouTube une fois la diffusion lancée. Pour choisir une autre vidéo, cliquez sur <em>« Changer de vidéo »</em> dans la barre supérieure de LuminaVR pour faire réapparaître YouTube instantanément !
+                  </li>
+                </ul>
               </div>
 
               {/* Instructions Steps */}
@@ -282,10 +315,10 @@ export const VideoSelectorModal: React.FC<VideoSelectorModalProps> = ({
                   Comment ça fonctionne :
                 </div>
                 <ol className="list-decimal list-inside space-y-1 pl-1 text-[11px] leading-relaxed">
-                  <li>Ouvrez votre film ou vidéo dans un onglet (Netflix, YouTube, Twitch...).</li>
-                  <li>Cliquez sur le bouton bleu ci-dessus <strong>« Connecter un Onglet »</strong>.</li>
-                  <li>Dans la fenêtre de sélection du navigateur, choisissez l'onglet de votre film et cochez <em>« Partager l'audio de l'onglet »</em>.</li>
-                  <li>Votre flux s'affiche immédiatement en IMAX avec immersion Ambilight et son synchronisé !</li>
+                  <li>Cliquez sur le bouton YouTube ci-dessus pour ouvrir la fenêtre de lecture.</li>
+                  <li>Cliquez sur <strong>« Connecter un Onglet »</strong> et choisissez la fenêtre YouTube.</li>
+                  <li>Réduisez la fenêtre YouTube : l'écran cinéma géant IMAX affiche le flux avec Ambilight 60 FPS !</li>
+                  <li>Cliquez sur <strong>« Changer de vidéo »</strong> dans LuminaVR pour faire réapparaître YouTube et choisir un autre film.</li>
                 </ol>
               </div>
             </div>

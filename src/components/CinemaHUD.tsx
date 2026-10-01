@@ -16,6 +16,7 @@ import {
   HelpCircle,
   FolderOpen,
   Globe,
+  ExternalLink,
 } from 'lucide-react';
 import {
   AmbilightConfig,
@@ -45,10 +46,13 @@ interface CinemaHUDProps {
   ambilightData: AmbilightSampleData;
   onOpenVideoSelector: () => void;
   onOpenQuestGuide: () => void;
-  onLaunchVR: () => void;
   isVRPresenting: boolean;
   isFullscreen: boolean;
   onToggleFullscreen: () => void;
+  onFocusStreamTab?: () => void;
+  onToggleStreamAudioMute?: () => void;
+  isStreamMutedInLumina?: boolean;
+  onStopStream?: () => void;
 }
 
 export const CinemaHUD: React.FC<CinemaHUDProps> = ({
@@ -71,10 +75,13 @@ export const CinemaHUD: React.FC<CinemaHUDProps> = ({
   ambilightData,
   onOpenVideoSelector,
   onOpenQuestGuide,
-  onLaunchVR,
   isVRPresenting,
   isFullscreen,
   onToggleFullscreen,
+  onFocusStreamTab,
+  onToggleStreamAudioMute,
+  isStreamMutedInLumina = true,
+  onStopStream,
 }) => {
   const [showControls, setShowControls] = useState(true);
   const [activePanel, setActivePanel] = useState<'none' | 'ambilight' | 'screen' | 'environment'>('none');
@@ -209,7 +216,7 @@ export const CinemaHUD: React.FC<CinemaHUDProps> = ({
           </button>
         </nav>
 
-        {/* Zone 3: Primary Actions (VR Launcher + Quest Help) */}
+        {/* Zone 3: Help Guide */}
         <div className="flex items-center gap-2">
           <button
             onClick={onOpenQuestGuide}
@@ -218,18 +225,70 @@ export const CinemaHUD: React.FC<CinemaHUDProps> = ({
           >
             <HelpCircle className="w-4 h-4" />
           </button>
-
-          <button
-            onClick={onLaunchVR}
-            className="px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-semibold text-xs rounded-xl shadow-lg shadow-amber-500/20 transition-all flex items-center gap-2 shrink-0 cursor-pointer"
-          >
-            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M21 7.28a3.5 3.5 0 0 0-3.5-3.5H6.5A3.5 3.5 0 0 0 3 7.28v9.44A3.5 3.5 0 0 0 6.5 20.22h11a3.5 3.5 0 0 0 3.5-3.5V7.28ZM7.5 13.5a2 2 0 1 1 0-4 2 2 0 0 1 0 4Zm9 0a2 2 0 1 1 0-4 2 2 0 0 1 0 4Z"/>
-            </svg>
-            <span>{isVRPresenting ? 'VR Active' : 'VR Quest 3S'}</span>
-          </button>
         </div>
       </header>
+
+      {/* Floating Active Stream Toolbar */}
+      {currentVideo.isStream && (
+        <div className="w-full mt-3 flex flex-wrap items-center justify-between gap-3 p-3 bg-slate-900/90 backdrop-blur-xl border border-sky-500/40 rounded-2xl shadow-2xl pointer-events-auto">
+          <div className="flex items-center gap-2.5">
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500"></span>
+            </span>
+            <div className="text-xs">
+              <span className="font-semibold text-white">Stream actif :</span>{' '}
+              <span className="text-sky-300 font-medium">{currentVideo.title}</span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {/* Button to bring back YouTube window/tab */}
+            <button
+              onClick={onFocusStreamTab}
+              className="px-3 py-1.5 bg-sky-500/20 hover:bg-sky-500/30 text-sky-200 hover:text-white rounded-xl border border-sky-500/40 transition-all text-xs font-semibold flex items-center gap-1.5 shadow-sm"
+              title="Faire réapparaître l'onglet ou la fenêtre YouTube pour changer de vidéo"
+            >
+              <ExternalLink className="w-3.5 h-3.5 text-sky-400" />
+              <span>Changer de vidéo (Ouvrir YouTube)</span>
+            </button>
+
+            {/* Anti-Echo Audio Mode Switch */}
+            <button
+              onClick={onToggleStreamAudioMute}
+              className={`px-3 py-1.5 rounded-xl border transition-all text-xs font-semibold flex items-center gap-1.5 shadow-sm ${
+                isStreamMutedInLumina
+                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30'
+                  : 'bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30'
+              }`}
+              title="Supprimer l'écho sonore entre l'onglet YouTube et LuminaVR"
+            >
+              {isStreamMutedInLumina ? (
+                <>
+                  <Volume2 className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Anti-Écho : Actif (Son direct YouTube)</span>
+                </>
+              ) : (
+                <>
+                  <VolumeX className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Couper le son en double (Écho)</span>
+                </>
+              )}
+            </button>
+
+            {/* Stop stream button */}
+            {onStopStream && (
+              <button
+                onClick={onStopStream}
+                className="px-3 py-1.5 bg-red-600/80 hover:bg-red-500 text-white rounded-xl transition-all text-xs font-semibold flex items-center gap-1.5"
+                title="Arrêter la diffusion du stream"
+              >
+                Arrêter le stream
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* FLOATING SETTINGS PANELS (Ambilight, Screen, Environment) */}
       <div className="flex-1 flex items-center justify-end pointer-events-none p-2">

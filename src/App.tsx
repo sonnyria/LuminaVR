@@ -75,6 +75,7 @@ export default function App() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const extractorRef = useRef<AmbilightExtractor>(new AmbilightExtractor());
   const streamRef = useRef<MediaStream | null>(null);
+  const streamWindowRef = useRef<Window | null>(null);
 
   // Current Video
   const [currentVideo, setCurrentVideo] = useState<VideoItem>(INITIAL_VIDEO);
@@ -82,6 +83,7 @@ export default function App() {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isStreamActive, setIsStreamActive] = useState(false);
+  const [isStreamMutedInLumina, setIsStreamMutedInLumina] = useState(true);
   const [volume, setVolume] = useState<number>(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEYS.VOLUME);
@@ -246,12 +248,25 @@ export default function App() {
         streamRef.current = null;
       }
 
-      const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: {
-          displaySurface: 'browser' as any,
-        },
-        audio: true,
-      });
+      // Request screen/tab capture with suppressLocalAudioPlayback to silence source tab if supported
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getDisplayMedia({
+          video: {
+            displaySurface: 'browser' as any,
+          },
+          audio: {
+            suppressLocalAudioPlayback: true,
+          } as any,
+        });
+      } catch {
+        stream = await navigator.mediaDevices.getDisplayMedia({
+          video: {
+            displaySurface: 'browser' as any,
+          },
+          audio: true,
+        });
+      }
 
       streamRef.current = stream;
       const video = videoRef.current;
@@ -259,7 +274,8 @@ export default function App() {
         video.src = '';
         video.srcObject = stream;
         video.volume = volume;
-        video.muted = false;
+        // Anti-echo: by default, mute LuminaVR's playback so the user hears only the direct, zero-latency sound of the original YouTube/Netflix tab
+        video.muted = isStreamMutedInLumina;
         video.play().catch(() => {});
       }
 
@@ -298,7 +314,41 @@ export default function App() {
         console.warn('Capture error:', err);
       }
     }
-  }, [volume]);
+  }, [volume, isStreamMutedInLumina]);
+
+  // Open YouTube/stream window and keep reference to focus later
+  const handleOpenStreamWindow = useCallback((url: string = 'https://www.youtube.com') => {
+    try {
+      if (streamWindowRef.current && !streamWindowRef.current.closed) {
+        streamWindowRef.current.focus();
+      } else {
+        const win = window.open(url, 'lumina_stream_window', 'width=1120,height=750,menubar=no,toolbar=no');
+        streamWindowRef.current = win;
+      }
+    } catch {
+      window.open(url, '_blank');
+    }
+  }, []);
+
+  // Bring back YouTube/source window to change video
+  const handleFocusStreamTab = useCallback(() => {
+    if (streamWindowRef.current && !streamWindowRef.current.closed) {
+      streamWindowRef.current.focus();
+    } else {
+      handleOpenStreamWindow('https://www.youtube.com');
+    }
+  }, [handleOpenStreamWindow]);
+
+  // Toggle Anti-Echo audio mute (Direct YouTube sound vs LuminaVR sound)
+  const handleToggleStreamAudioMute = useCallback(() => {
+    setIsStreamMutedInLumina((prev) => {
+      const next = !prev;
+      if (videoRef.current && currentVideo.isStream) {
+        videoRef.current.muted = next;
+      }
+      return next;
+    });
+  }, [currentVideo.isStream]);
 
   // Stop Browser Tab capture
   const handleStopTabCapture = useCallback(() => {
@@ -355,25 +405,6 @@ export default function App() {
       document.exitFullscreen().then(() => {
         setIsFullscreen(false);
       }).catch(() => {});
-    }
-  }, []);
-
-  // WebXR Launch triggered from HUD
-  const handleLaunchVR = useCallback(async () => {
-    const xr = (navigator as any).xr;
-    if (!xr) {
-      alert("WebXR n'est pas disponible dans ce navigateur. Utilisez le navigateur Meta Quest Browser sur votre Meta Quest 3S.");
-      return;
-    }
-
-    try {
-      const session = await xr.requestSession('immersive-vr', {
-        optionalFeatures: ['local-floor', 'bounded-floor', 'hand-tracking'],
-      });
-      // Handled inside Three.js renderer listener
-      setIsVRPresenting(true);
-    } catch (err: any) {
-      alert("Impossible de démarrer la session VR : " + (err.message || 'Assurez-vous d\'être sur votre casque VR'));
     }
   }, []);
 
@@ -486,10 +517,6 @@ export default function App() {
           e.preventDefault();
           handleVolumeChange(Math.max(0, volume - 0.1));
           break;
-        case 'KeyV':
-          e.preventDefault();
-          handleLaunchVR();
-          break;
       }
     };
 
@@ -500,7 +527,6 @@ export default function App() {
     handleToggleFullscreen,
     handleSeek,
     handleVolumeChange,
-    handleLaunchVR,
     ambilightConfig.enabled,
     duration,
     currentTime,
@@ -551,7 +577,6 @@ export default function App() {
         onSeek={handleSeek}
         currentTime={currentTime}
         duration={duration}
-        onEnterVR={handleLaunchVR}
         isVRPresenting={isVRPresenting}
         setIsVRPresenting={setIsVRPresenting}
       />
@@ -601,10 +626,13 @@ export default function App() {
         ambilightData={ambilightData}
         onOpenVideoSelector={() => setIsVideoModalOpen(true)}
         onOpenQuestGuide={() => setIsGuideModalOpen(true)}
-        onLaunchVR={handleLaunchVR}
         isVRPresenting={isVRPresenting}
         isFullscreen={isFullscreen}
         onToggleFullscreen={handleToggleFullscreen}
+        onFocusStreamTab={handleFocusStreamTab}
+        onToggleStreamAudioMute={handleToggleStreamAudioMute}
+        isStreamMutedInLumina={isStreamMutedInLumina}
+        onStopStream={handleStopTabCapture}
       />
 
       {/* Video Selection Modal (Local file, Streaming link, Browser tab capture) */}
@@ -616,6 +644,7 @@ export default function App() {
         onStartTabCapture={handleStartTabCapture}
         onStopTabCapture={handleStopTabCapture}
         isStreamActive={isStreamActive}
+        onOpenStreamWindow={handleOpenStreamWindow}
       />
 
       {/* Meta Quest 3S Guide & Tips Modal */}
