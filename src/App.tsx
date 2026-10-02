@@ -250,17 +250,26 @@ export default function App() {
         streamRef.current = null;
       }
 
-      // Request screen/tab capture with audio enabled
+      // Request screen/tab capture with audio enabled and suppressLocalAudioPlayback to mute the source tab
       let stream: MediaStream;
       try {
         stream = await navigator.mediaDevices.getDisplayMedia({
           video: true,
-          audio: true,
+          audio: {
+            suppressLocalAudioPlayback: true,
+          } as any,
         });
       } catch {
-        stream = await navigator.mediaDevices.getDisplayMedia({
-          video: true,
-        });
+        try {
+          stream = await navigator.mediaDevices.getDisplayMedia({
+            video: true,
+            audio: true,
+          });
+        } catch {
+          stream = await navigator.mediaDevices.getDisplayMedia({
+            video: true,
+          });
+        }
       }
 
       streamRef.current = stream;

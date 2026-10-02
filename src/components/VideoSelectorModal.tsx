@@ -294,14 +294,17 @@ export const VideoSelectorModal: React.FC<VideoSelectorModalProps> = ({
               <div className="p-3.5 bg-sky-950/30 rounded-xl border border-sky-500/30 text-xs text-slate-300 space-y-1.5">
                 <div className="font-semibold text-sky-400 flex items-center gap-1.5">
                   <Sparkles className="w-4 h-4" />
-                  Important pour le Son & la Fluidité :
+                  Gestion du Son & Écho :
                 </div>
                 <ul className="list-disc list-inside space-y-1.5 pl-1 text-[11px] text-slate-300 leading-relaxed">
                   <li>
-                    <strong>Activer le son :</strong> Lorsque la fenêtre de partage s'ouvre, choisissez l'onglet YouTube (section <em>« Onglet Chrome »</em>) et vérifiez que la case <strong>« Partager également l'audio »</strong> en bas à gauche est bien cochée. Le son sera diffusé directement dans vos écouteurs / casque VR avec le curseur de volume du cinéma !
+                    <strong>Son unique dans LuminaVR :</strong> LuminaVR coupe automatiquement le son de la fenêtre YouTube source pour que seul le cinéma 3D diffuse le son.
                   </li>
                   <li>
-                    <strong>Affichage fluide :</strong> Laissez la fenêtre YouTube en arrière-plan ou ouverte sur votre écran. Ne la réduisez pas complètement dans la barre des tâches de votre PC, car certains navigateurs suspendent l'envoi des images d'une fenêtre totalement minimisée.
+                    <strong>Astuce si son en double :</strong> Si votre version de Chrome continue d'émettre le son sur l'onglet d'origine, faites simplement un <em>clic droit sur l'onglet YouTube en haut de votre navigateur &gt; « Couper le son du site »</em>. Le son continuera d'être diffusé dans LuminaVR !
+                  </li>
+                  <li>
+                    <strong>Affichage fluide :</strong> Laissez la fenêtre YouTube en arrière-plan ou visible sur votre écran, sans la minimiser totalement dans la barre des tâches.
                   </li>
                 </ul>
               </div>
