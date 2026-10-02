@@ -322,7 +322,8 @@ export const VRCanvas: React.FC<VRCanvasProps> = ({
     const animate = () => {
       // Force video texture update whenever video is ready
       if (videoTextureRef.current && videoRef.current) {
-        if (videoRef.current.readyState >= 1) {
+        const vid = videoRef.current;
+        if (vid.readyState >= 1 || vid.videoWidth > 0 || vid.currentTime > 0) {
           videoTextureRef.current.needsUpdate = true;
         }
       }
@@ -781,7 +782,9 @@ export const VRCanvas: React.FC<VRCanvasProps> = ({
       lightsRef.current.right.position.set(baseWidth / 2, posY, -dist - 0.04);
     }
   }, [
+    currentVideo.id,
     currentVideo.url,
+    currentVideo.isStream,
     screenConfig.curvature,
     screenConfig.distance,
     screenConfig.size,
@@ -809,6 +812,7 @@ export const VRCanvas: React.FC<VRCanvasProps> = ({
     video.addEventListener('playing', handleVideoReady);
     video.addEventListener('seeked', handleVideoReady);
     video.addEventListener('timeupdate', handleVideoReady);
+    video.addEventListener('resize', handleVideoReady);
 
     return () => {
       video.removeEventListener('loadedmetadata', handleVideoReady);
@@ -817,8 +821,9 @@ export const VRCanvas: React.FC<VRCanvasProps> = ({
       video.removeEventListener('playing', handleVideoReady);
       video.removeEventListener('seeked', handleVideoReady);
       video.removeEventListener('timeupdate', handleVideoReady);
+      video.removeEventListener('resize', handleVideoReady);
     };
-  }, [currentVideo.url]);
+  }, [currentVideo.id, currentVideo.url, currentVideo.isStream]);
 
   // Real-time Ambilight Update on Texture & Lights
   useEffect(() => {

@@ -303,7 +303,7 @@ export const VideoSelectorModal: React.FC<VideoSelectorModalProps> = ({
                     <strong>Son en double (Écho) :</strong> Par défaut, LuminaVR coupe son propre son en mode stream pour laisser place au son direct parfait de YouTube sans aucun retard. Vous pouvez basculer le mode via le bouton <em>Anti-Écho</em> de la barre de contrôle.
                   </li>
                   <li>
-                    <strong>Cacher & Réafficher YouTube :</strong> Réduisez la fenêtre YouTube une fois la diffusion lancée. Pour choisir une autre vidéo, cliquez sur <em>« Changer de vidéo »</em> dans la barre supérieure de LuminaVR pour faire réapparaître YouTube instantanément !
+                    <strong>Affichage fluide :</strong> Laissez la fenêtre YouTube en arrière-plan ou ouverte sur votre écran. Ne la réduisez pas complètement dans la barre des tâches de votre PC, car certains navigateurs suspendent l'envoi des images d'une fenêtre totalement minimisée.
                   </li>
                 </ul>
               </div>
@@ -316,8 +316,8 @@ export const VideoSelectorModal: React.FC<VideoSelectorModalProps> = ({
                 </div>
                 <ol className="list-decimal list-inside space-y-1 pl-1 text-[11px] leading-relaxed">
                   <li>Cliquez sur le bouton YouTube ci-dessus pour ouvrir la fenêtre de lecture.</li>
-                  <li>Cliquez sur <strong>« Connecter un Onglet »</strong> et choisissez la fenêtre YouTube.</li>
-                  <li>Réduisez la fenêtre YouTube : l'écran cinéma géant IMAX affiche le flux avec Ambilight 60 FPS !</li>
+                  <li>Cliquez sur <strong>« Connecter un Onglet »</strong> et choisissez la fenêtre ou l'onglet YouTube.</li>
+                  <li>Laissez YouTube en arrière-plan : l'écran cinéma géant IMAX affiche le flux avec Ambilight 60 FPS !</li>
                   <li>Cliquez sur <strong>« Changer de vidéo »</strong> dans LuminaVR pour faire réapparaître YouTube et choisir un autre film.</li>
                 </ol>
               </div>

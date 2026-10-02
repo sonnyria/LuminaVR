@@ -188,7 +188,7 @@ export default function App() {
 
   // Play / Pause toggle
   const handleTogglePlay = useCallback(() => {
-    if (!currentVideo.url) {
+    if (!currentVideo.url && !currentVideo.isStream) {
       setIsVideoModalOpen(true);
       return;
     }
@@ -197,13 +197,15 @@ export default function App() {
 
     if (video.paused) {
       video.play().then(() => setIsPlaying(true)).catch((err) => {
-        console.warn('Playback prevented:', err);
+        console.warn('Playback prevented, retrying muted:', err);
+        video.muted = true;
+        video.play().then(() => setIsPlaying(true)).catch(() => {});
       });
     } else {
       video.pause();
       setIsPlaying(false);
     }
-  }, [currentVideo.url]);
+  }, [currentVideo.url, currentVideo.isStream]);
 
   // Seek handler
   const handleSeek = useCallback((percent: number) => {
@@ -252,18 +254,14 @@ export default function App() {
       let stream: MediaStream;
       try {
         stream = await navigator.mediaDevices.getDisplayMedia({
-          video: {
-            displaySurface: 'browser' as any,
-          },
+          video: true,
           audio: {
             suppressLocalAudioPlayback: true,
           } as any,
         });
       } catch {
         stream = await navigator.mediaDevices.getDisplayMedia({
-          video: {
-            displaySurface: 'browser' as any,
-          },
+          video: true,
           audio: true,
         });
       }
@@ -271,12 +269,19 @@ export default function App() {
       streamRef.current = stream;
       const video = videoRef.current;
       if (video) {
+        // Crucial: remove any src attribute so srcObject is never overridden by network loaders
+        video.removeAttribute('src');
         video.src = '';
         video.srcObject = stream;
         video.volume = volume;
-        // Anti-echo: by default, mute LuminaVR's playback so the user hears only the direct, zero-latency sound of the original YouTube/Netflix tab
         video.muted = isStreamMutedInLumina;
-        video.play().catch(() => {});
+        video.play().then(() => {
+          setIsPlaying(true);
+        }).catch((err) => {
+          console.warn('Playback error, retrying muted:', err);
+          video.muted = true;
+          video.play().then(() => setIsPlaying(true)).catch(() => {});
+        });
       }
 
       const videoTrack = stream.getVideoTracks()[0];
@@ -293,12 +298,13 @@ export default function App() {
         isLocal: false,
         isStream: true,
         description: 'Diffusion temps réel de votre onglet ou fenêtre de streaming avec Ambilight 60 FPS.',
-        url: 'stream://display-media',
+        url: '', // Left empty so React never applies a src attribute to the video tag
       };
 
       videoTrack.onended = () => {
         if (videoRef.current) {
           videoRef.current.srcObject = null;
+          videoRef.current.removeAttribute('src');
         }
         streamRef.current = null;
         setIsStreamActive(false);
@@ -366,8 +372,12 @@ export default function App() {
   // Synchronize and load video when currentVideo changes
   useEffect(() => {
     const video = videoRef.current;
-    if (!video || !currentVideo.url) return;
-    if (currentVideo.isStream) return; // Managed via MediaStream srcObject
+    if (!video) return;
+    if (currentVideo.isStream) {
+      video.removeAttribute('src');
+      return;
+    }
+    if (!currentVideo.url) return;
 
     // Clear any previous media stream
     if (video.srcObject) {
@@ -548,18 +558,19 @@ export default function App() {
       {/* Video Element: must have opacity: 1 so Meta Quest Browser / Chromium does NOT throttle the hardware video decoder */}
       <video
         ref={videoRef}
-        src={currentVideo.url || undefined}
-        crossOrigin={currentVideo.isLocal ? undefined : 'anonymous'}
+        src={currentVideo.isStream ? undefined : (currentVideo.url || undefined)}
+        crossOrigin={currentVideo.isStream || currentVideo.isLocal ? undefined : 'anonymous'}
         playsInline
+        autoPlay
         preload="auto"
         style={{
           position: 'fixed',
           top: 0,
           left: 0,
-          width: '64px',
-          height: '36px',
+          width: '160px',
+          height: '90px',
           opacity: 1,
-          zIndex: 0,
+          zIndex: -1,
           pointerEvents: 'none',
         }}
       />
@@ -595,10 +606,10 @@ export default function App() {
             </div>
             <div className="text-center">
               <h3 className="text-sm font-semibold text-white max-w-xs truncate">
-                {currentVideo.url ? currentVideo.title : 'Sélectionner un film'}
+                {currentVideo.url || currentVideo.isStream ? currentVideo.title : 'Sélectionner un film'}
               </h3>
               <p className="text-xs text-slate-400 mt-0.5">
-                {currentVideo.url ? 'Cliquer pour lancer la lecture avec le son' : 'Cliquer pour charger un fichier vidéo (Quest / PC)'}
+                {currentVideo.url || currentVideo.isStream ? 'Cliquer pour lancer la lecture avec le son' : 'Cliquer pour charger un fichier vidéo (Quest / PC)'}
               </p>
             </div>
           </div>
