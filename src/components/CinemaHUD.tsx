@@ -53,6 +53,8 @@ interface CinemaHUDProps {
   onToggleStreamAudioMute?: () => void;
   isStreamMutedInLumina?: boolean;
   onStopStream?: () => void;
+  isWebBrowserActive?: boolean;
+  onToggleWebBrowser?: () => void;
 }
 
 export const CinemaHUD: React.FC<CinemaHUDProps> = ({
@@ -82,6 +84,8 @@ export const CinemaHUD: React.FC<CinemaHUDProps> = ({
   onToggleStreamAudioMute,
   isStreamMutedInLumina = true,
   onStopStream,
+  isWebBrowserActive = false,
+  onToggleWebBrowser,
 }) => {
   const [showControls, setShowControls] = useState(true);
   const [activePanel, setActivePanel] = useState<'none' | 'ambilight' | 'screen' | 'environment'>('none');
@@ -207,12 +211,25 @@ export const CinemaHUD: React.FC<CinemaHUDProps> = ({
           </button>
 
           <button
+            onClick={onToggleWebBrowser}
+            className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5 shadow-sm ${
+              isWebBrowserActive
+                ? 'bg-amber-500 text-slate-950 font-bold border border-amber-400'
+                : 'text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30'
+            }`}
+            title="Ouvrir l'écran en Navigateur Web pour regarder YouTube, Twitch ou n'importe quel site"
+          >
+            <Globe className="w-3.5 h-3.5" />
+            <span>Navigateur Web {isWebBrowserActive ? 'Actif' : ''}</span>
+          </button>
+
+          <button
             onClick={onOpenVideoSelector}
             className="px-3 py-1.5 text-xs font-semibold text-sky-300 bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/30 rounded-lg transition-all flex items-center gap-1.5 shadow-sm"
-            title="Ouvrir le navigateur de streaming (YouTube, Netflix, etc.) et vos films"
+            title="Bibliothèque de films, démos et fichiers locaux"
           >
-            <Globe className="w-3.5 h-3.5 text-sky-400" />
-            <span>Navigateur & Films</span>
+            <Film className="w-3.5 h-3.5 text-sky-400" />
+            <span>Films & Démo</span>
           </button>
         </nav>
 

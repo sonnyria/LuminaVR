@@ -36,6 +36,8 @@ export interface VideoItem {
   aspectRatio?: string;
   isLocal?: boolean;
   isStream?: boolean;
+  isWebEmbed?: boolean;
+  webEmbedUrl?: string;
   fileSize?: string;
   description: string;
 }

@@ -8,6 +8,7 @@ import { VRCanvas } from './components/VRCanvas';
 import { CinemaHUD } from './components/CinemaHUD';
 import { VideoSelectorModal } from './components/VideoSelectorModal';
 import { QuestGuideModal } from './components/QuestGuideModal';
+import { CinemaWebBrowser } from './components/CinemaWebBrowser';
 import { AmbilightExtractor } from './utils/ambilightExtractor';
 import {
   AmbilightConfig,
@@ -96,6 +97,7 @@ export default function App() {
   });
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isVRPresenting, setIsVRPresenting] = useState(false);
+  const [isWebBrowserOpen, setIsWebBrowserOpen] = useState(false);
 
   // Modals
   const [isVideoModalOpen, setIsVideoModalOpen] = useState(false);
@@ -232,6 +234,12 @@ export default function App() {
       streamRef.current.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
       setIsStreamActive(false);
+    }
+    if (videoRef.current) {
+      videoRef.current.pause();
+    }
+    if (video.isWebEmbed) {
+      setIsWebBrowserOpen(true);
     }
     setCurrentVideo(video);
   }, []);
@@ -593,7 +601,7 @@ export default function App() {
       />
 
       {/* Center Play Button Overlay when paused */}
-      {!isPlaying && !isVideoModalOpen && !isGuideModalOpen && (
+      {!isPlaying && !isVideoModalOpen && !isGuideModalOpen && !isWebBrowserOpen && !currentVideo.isWebEmbed && (
         <div
           onClick={handleTogglePlay}
           className="absolute inset-0 z-20 flex flex-col items-center justify-center cursor-pointer pointer-events-auto bg-black/20 backdrop-blur-[1px] transition-all"
@@ -614,6 +622,22 @@ export default function App() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Interactive Cinema Web Browser Screen (YouTube, Twitch, Web) */}
+      {(isWebBrowserOpen || currentVideo.isWebEmbed) && (
+        <CinemaWebBrowser
+          currentVideo={currentVideo}
+          onSelectVideo={handleSelectVideo}
+          onCloseBrowser={() => {
+            setIsWebBrowserOpen(false);
+            if (currentVideo.isWebEmbed) {
+              setCurrentVideo(INITIAL_VIDEO);
+            }
+          }}
+          screenConfig={screenConfig}
+          ambilightConfig={ambilightConfig}
+        />
       )}
 
       {/* HUD Overlay with Cinema controls and Ambilight tuners */}
@@ -644,6 +668,8 @@ export default function App() {
         onToggleStreamAudioMute={handleToggleStreamAudioMute}
         isStreamMutedInLumina={isStreamMutedInLumina}
         onStopStream={handleStopTabCapture}
+        isWebBrowserActive={isWebBrowserOpen || !!currentVideo.isWebEmbed}
+        onToggleWebBrowser={() => setIsWebBrowserOpen((prev) => !prev)}
       />
 
       {/* Video Selection Modal (Local file, Streaming link, Browser tab capture) */}
@@ -656,6 +682,7 @@ export default function App() {
         onStopTabCapture={handleStopTabCapture}
         isStreamActive={isStreamActive}
         onOpenStreamWindow={handleOpenStreamWindow}
+        onOpenWebBrowser={() => setIsWebBrowserOpen(true)}
       />
 
       {/* Meta Quest 3S Guide & Tips Modal */}
