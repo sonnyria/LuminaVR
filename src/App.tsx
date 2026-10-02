@@ -83,7 +83,7 @@ export default function App() {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isStreamActive, setIsStreamActive] = useState(false);
-  const [isStreamMutedInLumina, setIsStreamMutedInLumina] = useState(true);
+  const [isStreamMutedInLumina, setIsStreamMutedInLumina] = useState(false);
   const [volume, setVolume] = useState<number>(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEYS.VOLUME);
@@ -250,19 +250,16 @@ export default function App() {
         streamRef.current = null;
       }
 
-      // Request screen/tab capture with suppressLocalAudioPlayback to silence source tab if supported
+      // Request screen/tab capture with audio enabled
       let stream: MediaStream;
       try {
         stream = await navigator.mediaDevices.getDisplayMedia({
           video: true,
-          audio: {
-            suppressLocalAudioPlayback: true,
-          } as any,
+          audio: true,
         });
       } catch {
         stream = await navigator.mediaDevices.getDisplayMedia({
           video: true,
-          audio: true,
         });
       }
 
@@ -274,14 +271,31 @@ export default function App() {
           video.removeAttribute('src');
         }
         video.srcObject = stream;
-        video.volume = volume;
-        video.muted = isStreamMutedInLumina;
+
+        // Ensure audio tracks are enabled and video is unmuted
+        const audioTracks = stream.getAudioTracks();
+        if (audioTracks.length > 0) {
+          audioTracks.forEach((track) => {
+            track.enabled = true;
+          });
+        }
+        video.volume = volume > 0 ? volume : 1;
+        video.muted = false;
+
         video.play().then(() => {
           setIsPlaying(true);
         }).catch((err) => {
-          console.warn('Playback error, retrying muted:', err);
+          console.warn('Playback error, retrying muted with interaction unmute:', err);
           video.muted = true;
-          video.play().then(() => setIsPlaying(true)).catch(() => {});
+          video.play().then(() => {
+            setIsPlaying(true);
+            const unmuteOnInteraction = () => {
+              video.muted = false;
+              video.volume = volume > 0 ? volume : 1;
+              window.removeEventListener('click', unmuteOnInteraction);
+            };
+            window.addEventListener('click', unmuteOnInteraction, { once: true });
+          }).catch(() => {});
         });
       }
 

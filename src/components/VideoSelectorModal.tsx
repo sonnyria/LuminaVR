@@ -290,15 +290,15 @@ export const VideoSelectorModal: React.FC<VideoSelectorModalProps> = ({
                 </div>
               </div>
 
-              {/* Anti-Echo and Window Management Tip */}
+              {/* Sound and Streaming Tips */}
               <div className="p-3.5 bg-sky-950/30 rounded-xl border border-sky-500/30 text-xs text-slate-300 space-y-1.5">
                 <div className="font-semibold text-sky-400 flex items-center gap-1.5">
                   <Sparkles className="w-4 h-4" />
-                  Anti-Écho & Contrôle de l'onglet YouTube :
+                  Important pour le Son & la Fluidité :
                 </div>
-                <ul className="list-disc list-inside space-y-1 pl-1 text-[11px] text-slate-300 leading-relaxed">
+                <ul className="list-disc list-inside space-y-1.5 pl-1 text-[11px] text-slate-300 leading-relaxed">
                   <li>
-                    <strong>Son en double (Écho) :</strong> Par défaut, LuminaVR coupe son propre son en mode stream pour laisser place au son direct parfait de YouTube sans aucun retard. Vous pouvez basculer le mode via le bouton <em>Anti-Écho</em> de la barre de contrôle.
+                    <strong>Activer le son :</strong> Lorsque la fenêtre de partage s'ouvre, choisissez l'onglet YouTube (section <em>« Onglet Chrome »</em>) et vérifiez que la case <strong>« Partager également l'audio »</strong> en bas à gauche est bien cochée. Le son sera diffusé directement dans vos écouteurs / casque VR avec le curseur de volume du cinéma !
                   </li>
                   <li>
                     <strong>Affichage fluide :</strong> Laissez la fenêtre YouTube en arrière-plan ou ouverte sur votre écran. Ne la réduisez pas complètement dans la barre des tâches de votre PC, car certains navigateurs suspendent l'envoi des images d'une fenêtre totalement minimisée.
@@ -310,13 +310,12 @@ export const VideoSelectorModal: React.FC<VideoSelectorModalProps> = ({
               <div className="p-3.5 bg-slate-950/40 rounded-xl border border-slate-800 text-xs text-slate-400 space-y-1.5">
                 <div className="font-semibold text-slate-200 flex items-center gap-1.5">
                   <CheckCircle2 className="w-4 h-4 text-sky-400" />
-                  Comment ça fonctionne :
+                  En 3 étapes simples :
                 </div>
                 <ol className="list-decimal list-inside space-y-1 pl-1 text-[11px] leading-relaxed">
-                  <li>Cliquez sur le bouton YouTube ci-dessus pour ouvrir la fenêtre de lecture.</li>
-                  <li>Cliquez sur <strong>« Connecter un Onglet »</strong> et choisissez la fenêtre ou l'onglet YouTube.</li>
-                  <li>Laissez YouTube en arrière-plan : l'écran cinéma géant IMAX affiche le flux avec Ambilight 60 FPS !</li>
-                  <li>Cliquez sur <strong>« Changer de vidéo »</strong> dans LuminaVR pour faire réapparaître YouTube et choisir un autre film.</li>
+                  <li>Cliquez sur le bouton <strong>« YouTube »</strong> ci-dessus pour lancer votre vidéo.</li>
+                  <li>Cliquez sur <strong>« Connecter un onglet »</strong> et sélectionnez l'onglet YouTube en laissant la case audio activée.</li>
+                  <li>L'écran cinéma géant IMAX 3D affiche le flux avec le son direct et l'Ambilight 60 FPS complet !</li>
                 </ol>
               </div>
             </div>

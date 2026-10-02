@@ -216,8 +216,38 @@ export const CinemaHUD: React.FC<CinemaHUDProps> = ({
           </button>
         </nav>
 
-        {/* Zone 3: Help Guide */}
+        {/* Zone 3: Stream status badge (discreet) & Help Guide */}
         <div className="flex items-center gap-2">
+          {currentVideo.isStream && (
+            <div className="flex items-center gap-2 px-3 py-1 bg-red-950/60 border border-red-500/40 rounded-xl text-xs backdrop-blur-md">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+              </span>
+              <span className="text-red-200 font-medium truncate max-w-[130px] sm:max-w-[200px]">
+                {currentVideo.title}
+              </span>
+              {onFocusStreamTab && (
+                <button
+                  onClick={onFocusStreamTab}
+                  className="p-1 hover:bg-red-900/50 text-red-300 hover:text-white rounded transition-colors"
+                  title="Ouvrir la fenêtre YouTube"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                </button>
+              )}
+              {onStopStream && (
+                <button
+                  onClick={onStopStream}
+                  className="px-2 py-0.5 bg-red-600/80 hover:bg-red-500 text-white rounded text-[10px] font-semibold transition-colors"
+                  title="Arrêter la diffusion"
+                >
+                  Arrêter
+                </button>
+              )}
+            </div>
+          )}
+
           <button
             onClick={onOpenQuestGuide}
             className="p-2 bg-slate-900/80 hover:bg-slate-800 text-slate-400 hover:text-white rounded-xl border border-slate-800 backdrop-blur-md transition-colors"
@@ -227,68 +257,6 @@ export const CinemaHUD: React.FC<CinemaHUDProps> = ({
           </button>
         </div>
       </header>
-
-      {/* Floating Active Stream Toolbar */}
-      {currentVideo.isStream && (
-        <div className="w-full mt-3 flex flex-wrap items-center justify-between gap-3 p-3 bg-slate-900/90 backdrop-blur-xl border border-sky-500/40 rounded-2xl shadow-2xl pointer-events-auto">
-          <div className="flex items-center gap-2.5">
-            <span className="relative flex h-2.5 w-2.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500"></span>
-            </span>
-            <div className="text-xs">
-              <span className="font-semibold text-white">Stream actif :</span>{' '}
-              <span className="text-sky-300 font-medium">{currentVideo.title}</span>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            {/* Button to bring back YouTube window/tab */}
-            <button
-              onClick={onFocusStreamTab}
-              className="px-3 py-1.5 bg-sky-500/20 hover:bg-sky-500/30 text-sky-200 hover:text-white rounded-xl border border-sky-500/40 transition-all text-xs font-semibold flex items-center gap-1.5 shadow-sm"
-              title="Faire réapparaître l'onglet ou la fenêtre YouTube pour changer de vidéo"
-            >
-              <ExternalLink className="w-3.5 h-3.5 text-sky-400" />
-              <span>Changer de vidéo (Ouvrir YouTube)</span>
-            </button>
-
-            {/* Anti-Echo Audio Mode Switch */}
-            <button
-              onClick={onToggleStreamAudioMute}
-              className={`px-3 py-1.5 rounded-xl border transition-all text-xs font-semibold flex items-center gap-1.5 shadow-sm ${
-                isStreamMutedInLumina
-                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30'
-                  : 'bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30'
-              }`}
-              title="Supprimer l'écho sonore entre l'onglet YouTube et LuminaVR"
-            >
-              {isStreamMutedInLumina ? (
-                <>
-                  <Volume2 className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Anti-Écho : Actif (Son direct YouTube)</span>
-                </>
-              ) : (
-                <>
-                  <VolumeX className="w-3.5 h-3.5 text-amber-400" />
-                  <span>Couper le son en double (Écho)</span>
-                </>
-              )}
-            </button>
-
-            {/* Stop stream button */}
-            {onStopStream && (
-              <button
-                onClick={onStopStream}
-                className="px-3 py-1.5 bg-red-600/80 hover:bg-red-500 text-white rounded-xl transition-all text-xs font-semibold flex items-center gap-1.5"
-                title="Arrêter la diffusion du stream"
-              >
-                Arrêter le stream
-              </button>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* FLOATING SETTINGS PANELS (Ambilight, Screen, Environment) */}
       <div className="flex-1 flex items-center justify-end pointer-events-none p-2">
