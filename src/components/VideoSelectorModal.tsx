@@ -20,7 +20,6 @@ interface VideoSelectorModalProps {
   onStopTabCapture?: () => void;
   isStreamActive?: boolean;
   onOpenStreamWindow?: (url: string) => void;
-  onOpenWebBrowser?: () => void;
 }
 
 export const VideoSelectorModal: React.FC<VideoSelectorModalProps> = ({
@@ -32,7 +31,6 @@ export const VideoSelectorModal: React.FC<VideoSelectorModalProps> = ({
   onStopTabCapture,
   isStreamActive = false,
   onOpenStreamWindow,
-  onOpenWebBrowser,
 }) => {
   const [activeTab, setActiveTab] = useState<'browser' | 'stream' | 'local'>('browser');
   const [customUrl, setCustomUrl] = useState('');
@@ -175,74 +173,53 @@ export const VideoSelectorModal: React.FC<VideoSelectorModalProps> = ({
 
         {/* Tab Body */}
         <div className="p-6 overflow-y-auto space-y-4 text-slate-300">
-          {/* TAB 1: NAVIGATEUR & DIFFUSION D'ONGLET (YouTube, Netflix, Twitch...) */}
+          {/* TAB 1: DIFFUSION D'ONGLET SUR L'ÉCRAN 3D (YouTube, Netflix, Twitch...) */}
           {activeTab === 'browser' && (
             <div className="space-y-5">
-              {/* Feature Banner: Direct Cinema Web Browser */}
-              <div className="p-5 rounded-2xl bg-gradient-to-br from-amber-500/20 via-slate-900 to-orange-500/15 border border-amber-500/40 space-y-3 shadow-xl">
+              {/* Feature Banner: 3D IMAX Projection */}
+              <div className="p-5 rounded-2xl bg-gradient-to-br from-sky-950/60 via-slate-900 to-indigo-950/40 border border-sky-500/30 space-y-3 shadow-xl">
                 <div className="flex items-start justify-between">
                   <div className="space-y-1">
-                    <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[11px] font-semibold border border-amber-500/30">
+                    <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-sky-500/20 text-sky-400 text-[11px] font-semibold border border-sky-500/30">
                       <Sparkles className="w-3 h-3" />
-                      Option Recommandée : Sans Partage d'Écran
+                      Projection Directe sur l'Écran 3D IMAX
                     </div>
                     <h3 className="text-base font-semibold text-white">
-                      Écran Navigateur Web Intégré (YouTube, Twitch, Web)
+                      Diffuser YouTube, Netflix ou Twitch sur l'écran 3D
                     </h3>
                   </div>
                 </div>
 
                 <p className="text-xs text-slate-300 leading-relaxed">
-                  Transforme directement l'écran cinéma géant en un <strong className="text-white">navigateur web interactif</strong>. Vous pouvez chercher et lire des vidéos YouTube, Twitch ou coller n'importe quel lien web sans aucun partage d'écran complexe.
+                  Le flux de votre onglet (YouTube, Netflix, Twitch) est directement projeté sur la texture de l'écran 3D de la salle de cinéma. L'éclairage <strong className="text-white">Ambilight 60 FPS</strong> illumine les murs en temps réel et tous vos réglages d'écran (<strong className="text-white">taille, courbure IMAX, distance, inclinaison</strong>) s'appliquent immédiatement !
                 </p>
 
                 {/* Big Action Button */}
-                <div className="pt-1 flex flex-col sm:flex-row gap-2.5">
-                  <button
-                    onClick={() => {
-                      if (onOpenWebBrowser) {
-                        onOpenWebBrowser();
-                      }
-                      onClose();
-                    }}
-                    className="flex-1 py-3 px-4 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-bold text-xs rounded-xl shadow-lg shadow-amber-500/25 transition-all flex items-center justify-center gap-2"
-                  >
-                    <Globe className="w-4 h-4" />
-                    <span>Ouvrir l'Écran Navigateur Web (YouTube & Twitch)</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Alternative: Screen / Tab capture */}
-              <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-slate-300">
-                    Alternative : Partage d'un onglet externe (Bureau / PC)
-                  </span>
+                <div className="pt-2 flex flex-col sm:flex-row gap-2.5">
                   {!isStreamActive ? (
                     <button
                       onClick={handleLaunchCapture}
                       disabled={isCapturing}
-                      className="py-1.5 px-3 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white font-medium text-xs rounded-lg transition-colors flex items-center gap-1.5"
+                      className="flex-1 py-3 px-4 bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-slate-950 font-bold text-xs rounded-xl shadow-lg shadow-sky-500/25 transition-all flex items-center justify-center gap-2"
                     >
-                      <Globe className="w-3.5 h-3.5 text-sky-400" />
-                      <span>{isCapturing ? 'Connexion...' : 'Partager un onglet'}</span>
+                      <Globe className="w-4 h-4" />
+                      <span>{isCapturing ? 'Connexion au flux...' : 'Connecter un onglet (YouTube / Streaming)'}</span>
                     </button>
                   ) : (
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-emerald-400 font-medium">Flux actif</span>
+                    <div className="flex-1 flex gap-2">
+                      <div className="flex-1 py-2.5 px-3.5 bg-emerald-500/15 border border-emerald-500/40 rounded-xl text-emerald-400 text-xs flex items-center gap-2 font-medium">
+                        <CheckCircle2 className="w-4 h-4 shrink-0" />
+                        <span className="truncate">Flux 3D actif : {currentVideo.title}</span>
+                      </div>
                       <button
                         onClick={onStopTabCapture}
-                        className="py-1 px-2.5 bg-red-600/80 hover:bg-red-500 text-white text-xs font-semibold rounded-lg"
+                        className="py-2.5 px-4 bg-red-600/80 hover:bg-red-500 text-white text-xs font-semibold rounded-xl transition-colors"
                       >
                         Arrêter
                       </button>
                     </div>
                   )}
                 </div>
-                <p className="text-[11px] text-slate-400">
-                  Si vous préférez diffuser un onglet Chrome ou Edge externe, vous pouvez utiliser la capture d'onglet classique.
-                </p>
               </div>
 
               {/* Quick Launch Websites in New Tab */}
@@ -263,7 +240,7 @@ export const VideoSelectorModal: React.FC<VideoSelectorModalProps> = ({
                     className="p-3 bg-slate-950/60 hover:bg-slate-850 rounded-xl border border-slate-800 hover:border-red-500/50 transition-all flex items-center justify-between group text-left"
                   >
                     <div className="flex items-center gap-2.5">
-                      <div className="w-7 h-7 rounded-lg bg-red-600/20 text-red-500 flex items-center justify-center font-bold text-xs border border-red-500/30">
+                      <div className="w-7 h-7 rounded-lg bg-red-600/20 text-red-400 flex items-center justify-center font-bold text-xs border border-red-500/30">
                         YT
                       </div>
                       <span className="text-xs font-medium text-slate-200 group-hover:text-white">YouTube</span>

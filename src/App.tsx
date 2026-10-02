@@ -8,7 +8,6 @@ import { VRCanvas } from './components/VRCanvas';
 import { CinemaHUD } from './components/CinemaHUD';
 import { VideoSelectorModal } from './components/VideoSelectorModal';
 import { QuestGuideModal } from './components/QuestGuideModal';
-import { CinemaWebBrowser } from './components/CinemaWebBrowser';
 import { AmbilightExtractor } from './utils/ambilightExtractor';
 import {
   AmbilightConfig,
@@ -97,7 +96,6 @@ export default function App() {
   });
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isVRPresenting, setIsVRPresenting] = useState(false);
-  const [isWebBrowserOpen, setIsWebBrowserOpen] = useState(false);
 
   // Modals
   const [isVideoModalOpen, setIsVideoModalOpen] = useState(false);
@@ -235,12 +233,6 @@ export default function App() {
       streamRef.current = null;
       setIsStreamActive(false);
     }
-    if (videoRef.current) {
-      videoRef.current.pause();
-    }
-    if (video.isWebEmbed) {
-      setIsWebBrowserOpen(true);
-    }
     setCurrentVideo(video);
   }, []);
 
@@ -278,8 +270,9 @@ export default function App() {
       const video = videoRef.current;
       if (video) {
         // Crucial: remove any src attribute so srcObject is never overridden by network loaders
-        video.removeAttribute('src');
-        video.src = '';
+        if (video.hasAttribute('src')) {
+          video.removeAttribute('src');
+        }
         video.srcObject = stream;
         video.volume = volume;
         video.muted = isStreamMutedInLumina;
@@ -438,23 +431,15 @@ export default function App() {
     const processFrame = () => {
       if (!isSubscribed) return;
 
-      if (ambilightConfig.enabled && video.readyState >= 2 && !video.paused) {
+      if (ambilightConfig.enabled && (video.readyState >= 2 || video.videoWidth > 0) && !video.paused) {
         const data = extractorRef.current.extract(video, ambilightConfig);
         setAmbilightData(data);
       }
 
-      if ('requestVideoFrameCallback' in video) {
-        frameCallbackId = (video as any).requestVideoFrameCallback(processFrame);
-      } else {
-        animFrameId = requestAnimationFrame(processFrame);
-      }
+      animFrameId = requestAnimationFrame(processFrame);
     };
 
-    if ('requestVideoFrameCallback' in video) {
-      frameCallbackId = (video as any).requestVideoFrameCallback(processFrame);
-    } else {
-      animFrameId = requestAnimationFrame(processFrame);
-    }
+    animFrameId = requestAnimationFrame(processFrame);
 
     return () => {
       isSubscribed = false;
@@ -563,7 +548,7 @@ export default function App() {
 
   return (
     <main className="relative w-screen h-screen bg-[#020408] text-white overflow-hidden select-none font-sans">
-      {/* Video Element: must have opacity: 1 so Meta Quest Browser / Chromium does NOT throttle the hardware video decoder */}
+      {/* Video Element: must not be occluded by parent background */}
       <video
         ref={videoRef}
         src={currentVideo.isStream ? undefined : (currentVideo.url || undefined)}
@@ -573,12 +558,12 @@ export default function App() {
         preload="auto"
         style={{
           position: 'fixed',
-          top: 0,
-          left: 0,
-          width: '160px',
-          height: '90px',
-          opacity: 1,
-          zIndex: -1,
+          bottom: 0,
+          right: 0,
+          width: '8px',
+          height: '8px',
+          opacity: 0.05,
+          zIndex: 1,
           pointerEvents: 'none',
         }}
       />
@@ -601,7 +586,7 @@ export default function App() {
       />
 
       {/* Center Play Button Overlay when paused */}
-      {!isPlaying && !isVideoModalOpen && !isGuideModalOpen && !isWebBrowserOpen && !currentVideo.isWebEmbed && (
+      {!isPlaying && !isVideoModalOpen && !isGuideModalOpen && (
         <div
           onClick={handleTogglePlay}
           className="absolute inset-0 z-20 flex flex-col items-center justify-center cursor-pointer pointer-events-auto bg-black/20 backdrop-blur-[1px] transition-all"
@@ -622,22 +607,6 @@ export default function App() {
             </div>
           </div>
         </div>
-      )}
-
-      {/* Interactive Cinema Web Browser Screen (YouTube, Twitch, Web) */}
-      {(isWebBrowserOpen || currentVideo.isWebEmbed) && (
-        <CinemaWebBrowser
-          currentVideo={currentVideo}
-          onSelectVideo={handleSelectVideo}
-          onCloseBrowser={() => {
-            setIsWebBrowserOpen(false);
-            if (currentVideo.isWebEmbed) {
-              setCurrentVideo(INITIAL_VIDEO);
-            }
-          }}
-          screenConfig={screenConfig}
-          ambilightConfig={ambilightConfig}
-        />
       )}
 
       {/* HUD Overlay with Cinema controls and Ambilight tuners */}
@@ -668,8 +637,6 @@ export default function App() {
         onToggleStreamAudioMute={handleToggleStreamAudioMute}
         isStreamMutedInLumina={isStreamMutedInLumina}
         onStopStream={handleStopTabCapture}
-        isWebBrowserActive={isWebBrowserOpen || !!currentVideo.isWebEmbed}
-        onToggleWebBrowser={() => setIsWebBrowserOpen((prev) => !prev)}
       />
 
       {/* Video Selection Modal (Local file, Streaming link, Browser tab capture) */}
@@ -682,7 +649,6 @@ export default function App() {
         onStopTabCapture={handleStopTabCapture}
         isStreamActive={isStreamActive}
         onOpenStreamWindow={handleOpenStreamWindow}
-        onOpenWebBrowser={() => setIsWebBrowserOpen(true)}
       />
 
       {/* Meta Quest 3S Guide & Tips Modal */}

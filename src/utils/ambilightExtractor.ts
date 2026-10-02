@@ -30,7 +30,6 @@ export class AmbilightExtractor {
   public extract(video: HTMLVideoElement, config: AmbilightConfig): AmbilightSampleData {
     if (
       !this.ctx ||
-      video.readyState < 2 ||
       video.videoWidth === 0 ||
       video.videoHeight === 0 ||
       (video.paused && !video.seeking)
